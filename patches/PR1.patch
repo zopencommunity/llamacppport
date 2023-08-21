@@ -1,0 +1,232 @@
+diff --git a/examples/server/httplib.h b/examples/server/httplib.h
+index 2874600..01882de 100644
+--- a/examples/server/httplib.h
++++ b/examples/server/httplib.h
+@@ -172,7 +172,7 @@ using socket_t = SOCKET;
+ #else // not _WIN32
+ 
+ #include <arpa/inet.h>
+-#ifndef _AIX
++#if !defined(_AIX) && !defined(__MVS__)
+ #include <ifaddrs.h>
+ #endif
+ #include <net/if.h>
+@@ -2804,7 +2804,7 @@ inline bool bind_ip_address(socket_t sock, const std::string &host) {
+   return ret;
+ }
+ 
+-#if !defined _WIN32 && !defined ANDROID && !defined _AIX
++#if !defined _WIN32 && !defined ANDROID && !defined _AIX && !defined __MVS__
+ #define USE_IF2IP
+ #endif
+ 
+diff --git a/ggml.c b/ggml.c
+index beb7f46..fe53eb7 100644
+--- a/ggml.c
++++ b/ggml.c
+@@ -9,7 +9,7 @@
+ 
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+ #include <malloc.h> // using malloc.h with MSC/MINGW
+-#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
++#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__MVS__)
+ #include <alloca.h>
+ #endif
+ 
+@@ -197,10 +197,19 @@ typedef void * thread_ret_t;
+ #else
+ inline static void * ggml_aligned_malloc(size_t size) {
+     void * aligned_memory = NULL;
++#ifdef __MVS__
++    if (size == 0)
++      size = 1;
++    aligned_memory = malloc(size);
++    int result = 0;
++    if (aligned_memory == NULL)
++      result = errno;
++#else
+ #ifdef GGML_USE_METAL
+     int result = posix_memalign(&aligned_memory, getpagesize(), size);
+ #else
+     int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
++#endif
+ #endif
+     if (result != 0) {
+         // Handle allocation failure
+@@ -299,7 +308,7 @@ typedef double ggml_float;
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+ #include <intrin.h>
+ #else
+-#if !defined(__riscv)
++#if !defined(__riscv) && !defined(__MVS__)
+ #include <immintrin.h>
+ #endif
+ #endif
+diff --git a/k_quants.c b/k_quants.c
+index 6348fce..756fee1 100644
+--- a/k_quants.c
++++ b/k_quants.c
+@@ -26,7 +26,7 @@
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+ #include <intrin.h>
+ #else
+-#if !defined(__riscv)
++#if !defined(__riscv) && !defined(__MVS__)
+ #include <immintrin.h>
+ #endif
+ #endif
+diff --git a/llama-util.h b/llama-util.h
+index 75e19c5..23c2cc3 100644
+--- a/llama-util.h
++++ b/llama-util.h
+@@ -15,6 +15,7 @@
+ #include <string>
+ #include <vector>
+ #include <stdexcept>
++#include <sys/endian.h>
+ 
+ #ifdef __has_include
+     #if __has_include(<unistd.h>)
+@@ -28,6 +29,42 @@
+     #endif
+ #endif
+ 
++#ifdef BIG_ENDIAN
++#define LITTLE_TO_BIG_32(x) ((((x) & 0xFF000000U) >> 24) | \
++                             (((x) & 0x00FF0000U) >>  8) | \
++                             (((x) & 0x0000FF00U) <<  8) | \
++                             (((x) & 0x000000FFU) << 24))
++
++float ReverseFloat( const float inFloat )
++{
++  float retVal;
++  char *floatToConvert = ( char* ) & inFloat;
++  char *returnFloat = ( char* ) & retVal;
++
++  // swap the bytes into a temporary buffer
++  returnFloat[0] = floatToConvert[3];
++  returnFloat[1] = floatToConvert[2];
++  returnFloat[2] = floatToConvert[1];
++  returnFloat[3] = floatToConvert[0];
++
++  return retVal;
++}
++
++uint16_t ReverseShort( uint16_t inInt)
++{
++  uint16_t retVal;
++  char *intToConvert = ( char* ) & inInt;
++  char *returnInt = ( char* ) & retVal;
++
++  // swap the bytes into a temporary buffer
++  returnInt[0] = intToConvert[1];
++  returnInt[1] = intToConvert[0];
++
++  return retVal;
++}
++#endif
++
++
+ #if defined(_WIN32)
+     #define WIN32_LEAN_AND_MEAN
+     #ifndef NOMINMAX
+@@ -118,6 +155,9 @@ struct llama_file {
+     std::uint32_t read_u32() {
+         std::uint32_t ret;
+         read_raw(&ret, sizeof(ret));
++#ifdef BIG_ENDIAN
++	    	ret = LITTLE_TO_BIG_32(ret);
++#endif
+         return ret;
+     }
+ 
+@@ -470,6 +510,13 @@ struct llama_buffer {
+     void resize(size_t len) {
+ #ifdef GGML_USE_METAL
+         free(addr);
++#ifdef __MVS__
++        addr = malloc(len);
++        result = 0;
++        if (addr == NULL)
++          result = errno;
++        memset(addr, 0, len);
++#else
+         int result = posix_memalign((void **) &addr, getpagesize(), len);
+         if (result == 0) {
+             memset(addr, 0, len);
+@@ -477,6 +524,7 @@ struct llama_buffer {
+         else {
+             addr = NULL;
+         }
++#endif
+ #else
+         delete[] addr;
+         addr = new uint8_t[len];
+diff --git a/llama.cpp b/llama.cpp
+index 3452439..b39fbcc 100644
+--- a/llama.cpp
++++ b/llama.cpp
+@@ -574,6 +574,9 @@ struct llama_file_loader {
+ 
+             float score = 0.0f;
+             file.read_raw(&score, sizeof(score));
++#ifdef BIG_ENDIAN
++            score = ReverseFloat(score);
++#endif
+ 
+             vocab.token_to_id[word] = i;
+ 
+@@ -590,6 +593,13 @@ struct llama_file_loader {
+             tensor.type = (enum ggml_type) file.read_u32();
+             tensor.ne.resize(n_dims);
+             file.read_raw(tensor.ne.data(), sizeof(tensor.ne[0]) * n_dims);
++#ifdef BIG_ENDIAN
++            // Convert the tensor data from little endian to big endian
++            for (size_t i = 0; i < n_dims; ++i) {
++                  uint32_t* element = reinterpret_cast<uint32_t*>(tensor.ne.data() + i);
++                  *element = LITTLE_TO_BIG_32(*element);
++            }    
++#endif
+             std::string name = file.read_string(name_len);
+             if (n_dims < 1 || n_dims > 2) {
+                 throw std::runtime_error(format("llama.cpp: tensor '%s' should not be %u-dimensional", name.c_str(), n_dims));
+@@ -706,6 +716,9 @@ struct llama_model_loader {
+         if (!llama_mmap::SUPPORTED) {
+             use_mmap = false;
+         }
++#ifdef __MVS__
++        use_mmap = false;
++#endif
+         this->use_mmap = use_mmap;
+     }
+ 
+@@ -833,10 +846,26 @@ struct llama_model_loader {
+             llama_file & file = file_loader->file;
+             file.seek(lt.file_off, SEEK_SET);
+             file.read_raw(lt.data, lt.size);
+-        }
+ 
+-        if (0) {
+-            print_checksum(lt);
++#ifdef BIG_ENDIAN
++#define QK4_0 32
++typedef struct {
++    ggml_fp16_t d;          // delta
++    uint8_t qs[QK4_0 / 2];  // nibbles / quants
++} block_q4_0;
++
++            // Convert the tensor data from little endian to big endian
++            if (lt.type == 0) 
++                for (size_t i = 0; i < (lt.size/4); ++i) {
++                      uint32_t* element = reinterpret_cast<uint32_t*>(lt.data) + i;
++                      *element = LITTLE_TO_BIG_32 (*element);
++                }    
++            if (lt.type == 2) 
++                for (size_t i = 0; i < (lt.size/sizeof(block_q4_0)); ++i) {
++                      block_q4_0* element = reinterpret_cast<block_q4_0*>(lt.data) + i;
++                      element->d = ReverseShort (element->d);
++                }    
++#endif
+         }
+     }
+ 

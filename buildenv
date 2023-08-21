@@ -1,0 +1,52 @@
+export ZOPEN_STABLE_DEPS="zoslib make cmake"
+export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
+export ZOPEN_DEV_DEPS="zoslib make cmake"
+export ZOPEN_BUILD_LINE="DEV"
+export ZOPEN_NAME="llama"
+
+rm -f "llama"
+ln -s "llama.cpp" $ZOPEN_NAME
+
+export ZOPEN_COMP="CLANG"
+
+export ZOPEN_CONFIGURE="cmake"
+export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" ."
+
+export ZOPEN_MAKE="cmake"
+export ZOPEN_MAKE_OPTS="--build ../build --parallel \$ZOPEN_NUM_JOBS --config Release"
+export ZOPEN_MAKE_MINIMAL=Y
+
+export ZOPEN_INSTALL="cmake"
+export ZOPEN_INSTALL_OPTS="--install ../build"
+
+export ZOPEN_CHECK="skip"
+
+zopen_check_results()
+{
+  dir="$1"
+  pfx="$2"
+  chk="$1/$2_check.log"
+
+  # Echo the following information to gauge build health
+  echo "actualFailures:0"
+  echo "totalTests:1"
+  echo "expectedFailures:0"
+  echo "expectedTotalTests:1"
+}
+
+zopen_append_to_env()
+{
+  # echo envars outside of PATH, MANPATH, LIBPATH
+}
+
+zopen_append_to_setup()
+{
+  # echo commands that will run when installing via setup.sh
+}
+
+zopen_get_version()
+{
+  # Modify to echo the version of your tool/library
+  # Rather than hardcoding the version, obtain the version by running the tool/library
+  echo "1.0.0"
+}

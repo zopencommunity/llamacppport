@@ -1,0 +1,6 @@
+log.*/
+build/
+install/
+llama*/
+llama
+*.bin
