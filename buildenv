@@ -1,9 +1,11 @@
+export ZOPEN_BUILD_LINE="DEV"
 export ZOPEN_STABLE_DEPS="zoslib make cmake"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_DEPS="zoslib make cmake"
 export ZOPEN_DEV_TAG="master-9e232f0"
 export ZOPEN_BUILD_LINE="DEV"
 export ZOPEN_NAME="llamacpp-master"
+export ZOPEN_RUNTIME_DEPS="ncurses"
 
 rm -f "llama"
 ln -s "llama.cpp" "llama"
@@ -20,6 +22,12 @@ export ZOPEN_MAKE_MINIMAL=Y
 
 export ZOPEN_INSTALL="cmake"
 export ZOPEN_INSTALL_OPTS="--install ../build"
+
+# Needs more testing
+if false; then
+  export ZOPEN_EXTRA_CPPFLAGS="-DGGML_USE_OPENBLAS -I /home/itodoro/projects/openblas/openblas/include/openblas -mvx -mzvector -march=z15"
+  export ZOPEN_EXTRA_LIBS="/home/itodoro/projects/openblas/openblas/libopenblas.x"
+fi
 
 export ZOPEN_CHECK="skip"
 
