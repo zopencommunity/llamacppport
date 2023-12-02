@@ -1,10 +1,14 @@
-export ZOPEN_BUILD_LINE="DEV"
+# bump: llamacpp-version /LLAMACPP_VERSION="(.*)"/ gitrefs:https://github.com/ggerganov/llama.cpp.git|re:/b([\d]{4})/|semver:*|/1\d00$/
+LLAMACPP_VERSION="1600"
+
+export ZOPEN_BUILD_LINE="STABLE"
 export ZOPEN_STABLE_DEPS="zoslib make cmake"
+export ZOPEN_STABLE_URL="https://github.com/ggerganov/llama.cpp/archive/refs/tags/b${LLAMACPP_VERSION}.tar.gz"
+export ZOPEN_STABLE_DEPS="zoslib make cmake curl gzip"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_DEPS="zoslib make cmake"
 export ZOPEN_DEV_TAG="master-9e232f0"
-export ZOPEN_BUILD_LINE="DEV"
-export ZOPEN_NAME="llamacpp-master"
+export ZOPEN_NAME="llamacpp"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
 rm -f "llama"
@@ -56,7 +60,5 @@ zopen_append_to_setup()
 
 zopen_get_version()
 {
-  # Modify to echo the version of your tool/library
-  # Rather than hardcoding the version, obtain the version by running the tool/library
-  echo "1.0.0"
+  echo "b$LLAMACPP_VERSION"
 }
