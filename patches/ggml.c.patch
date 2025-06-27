@@ -1,0 +1,29 @@
+diff --git a/ggml/src/ggml.c b/ggml/src/ggml.c
+index 196b7b8..e66cc5e 100644
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -16,7 +16,7 @@
+ 
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+ #include <malloc.h> // using malloc.h with MSC/MINGW
+-#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
++#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__MVS__)
+ #include <alloca.h>
+ #endif
+ 
+@@ -287,6 +287,15 @@ void * ggml_aligned_malloc(size_t size) {
+ 
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+     return _aligned_malloc(size, alignment);
++#elif defined(__MVS__)
++    void * aligned_memory = NULL;
++    if (size ==0)
++	    size = 1;
++    aligned_memory = malloc(size);
++    int result = 0;
++    if (aligned_memory == NULL)
++	    result = errno;
++    return aligned_memory;
+ #else
+     if (size == 0) {
+         GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
