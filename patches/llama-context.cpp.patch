@@ -1,0 +1,28 @@
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index c29fe7e..040cb64 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -1212,7 +1212,10 @@ int llama_context::decode(llama_batch & inp_batch) {
+                     }
+                 }
+             }
+-            std::fill(output_ids.begin(), output_ids.end(), -1);
++            // std::fill(output_ids.begin(), output_ids.end(), -1);
++           for (auto& id : output_ids) {
++               id = -1;
++           }
+             for (int32_t i = 0; i < n_outputs; ++i) {
+                 output_ids[out_ids[i]] = i;
+             }
+@@ -1297,7 +1300,10 @@ int32_t llama_context::output_reserve(int32_t n_outputs) {
+     embd   = has_embd   ? output_base + logits_size : nullptr;
+
+     // set all ids as invalid (negative)
+-    std::fill(output_ids.begin(), output_ids.end(), -1);
++    // std::fill(output_ids.begin(), output_ids.end(), -1);
++    for (auto& id : output_ids) {
++       id = -1;
++    }
+
+     this->n_outputs     = 0;
+     this->n_outputs_max = n_outputs_max;
