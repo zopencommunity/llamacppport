@@ -1,0 +1,60 @@
+diff --git a/vendor/stb/stb_image.h b/vendor/stb/stb_image.h
+index 9eedabe..92d5251 100644
+--- a/vendor/stb/stb_image.h
++++ b/vendor/stb/stb_image.h
+@@ -620,6 +620,10 @@ STBIDEF int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const ch
+    #define stbi_inline __forceinline
+ #endif
+
++#ifdef __MVS__
++   #define STBI_NO_THREAD_LOCALS
++#endif
++
+ #ifndef STBI_NO_THREAD_LOCALS
+    #if defined(__cplusplus) &&  __cplusplus >= 201103L
+       #define STBI_THREAD_LOCAL       thread_local
+@@ -721,6 +725,10 @@ typedef unsigned char validate_uint32[sizeof(stbi__uint32)==4 ? 1 : -1];
+ #define STBI_NO_SIMD
+ #endif
+
++#if defined(__MVS__)
++#include <zos-tls.h>
++#endif
++
+ #if !defined(STBI_NO_SIMD) && (defined(STBI__X86_TARGET) || defined(STBI__X64_TARGET))
+ #define STBI_SSE2
+ #include <emmintrin.h>
+@@ -963,11 +971,33 @@ static int      stbi__pnm_info(stbi__context *s, int *x, int *y, int *comp);
+ static int      stbi__pnm_is16(stbi__context *s);
+ #endif
+
++#if defined(__MVS__)
++static __tlssim<const char*> stbi__g_failure_reason_tls("");
++#define stbi__g_failure_reason (*stbi__g_failure_reason_tls.access())
++
++#ifndef STBI_NO_THREAD_LOCALS
++static __tlssim<int> stbi__vertically_flip_on_load_local_tls(0);
++static __tlssim<int> stbi__vertically_flip_on_load_set_tls(0);
++static __tlssim<int> stbi__unpremultiply_on_load_local_tls(0);
++static __tlssim<int> stbi__unpremultiply_on_load_set_tls(0);
++static __tlssim<int> stbi__de_iphone_flag_local_tls(0);
++static __tlssim<int> stbi__de_iphone_flag_set_tls(0);
++
++#define stbi__vertically_flip_on_load_local (*stbi__vertically_flip_on_load_local_tls.access())
++#define stbi__vertically_flip_on_load_set (*stbi__vertically_flip_on_load_set_tls.access())
++#define stbi__unpremultiply_on_load_local (*stbi__unpremultiply_on_load_local_tls.access())
++#define stbi__unpremultiply_on_load_set (*stbi__unpremultiply_on_load_set_tls.access())
++#define stbi__de_iphone_flag_local (*stbi__de_iphone_flag_local_tls.access())
++#define stbi__de_iphone_flag_set (*stbi__de_iphone_flag_set_tls.access())
++#endif
++
++#else
+ static
+ #ifdef STBI_THREAD_LOCAL
+ STBI_THREAD_LOCAL
+ #endif
+ const char *stbi__g_failure_reason;
++#endif
+
+ STBIDEF const char *stbi_failure_reason(void)
+ {
