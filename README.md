@@ -1,12 +1,14 @@
-# Llamacpp
+[![Automatic version updates](https://github.com/zopencommunity/llama.cppport/actions/workflows/bump.yml/badge.svg)](https://github.com/ZOSOpenTools/llama.cppport/actions/workflows/bump.yml)
 
-A C++ library for writing high-performance network applications
+# llama.cpp
+
+Enable AI inferencing on z/os
 
 # Installation and Usage
 
 Use the zopen package manager ([QuickStart Guide](https://zopen.community/#/Guides/QuickStart)) to install:
 ```bash
-zopen install llamacpp
+zopen install llama.cpp
 ```
 
 # Building from Source
@@ -27,7 +29,6 @@ See the [zopen porting guide](https://zopen.community/#/Guides/Porting) for more
 
 
 # Troubleshooting
-TBD
 
 # Contributing
 Contributions are welcome! Please follow the [zopen contribution guidelines](https://github.com/zopencommunity/meta/blob/main/CONTRIBUTING.md).
