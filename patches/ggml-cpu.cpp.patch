@@ -1,0 +1,62 @@
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.cpp b/ggml/src/ggml-cpu/ggml-cpu.cpp
+index e013e8b..6290b22 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.cpp
++++ b/ggml/src/ggml-cpu/ggml-cpu.cpp
+@@ -33,6 +33,38 @@
+ #    include <sys/types.h>
+ #endif
+
++#define CVT_PTR        0x10
++#define CVTRCEP_OFFSET         0x490
++#define RCEAFC_OFFSET  0x088
++
++typedef unsigned data_area_ptr_assign_type;
++
++typedef union {
++    struct {
++#if defined(_LP64)
++        data_area_ptr_assign_type lower;
++#endif
++       data_area_ptr_assign_type assign;
++    };
++    char* deref;
++} data_area_ptr;
++
++uint64_t get_free_memory(void) {
++    uint64_t freeram;
++    data_area_ptr cvt = {0};
++    data_area_ptr rcep = {0};
++    cvt.assign = *(data_area_ptr_assign_type*)(CVT_PTR);
++    rcep.assign = *(data_area_ptr_assign_type*)(cvt.deref + CVTRCEP_OFFSET);
++    freeram = (uint64_t)*((uint32_t*)(rcep.deref + RCEAFC_OFFSET)) * 4096;
++
++    return freeram;
++}
++
++uint64_t get_total_memory(void) {
++    /* Use CVTRLSTG to get the size of actual real storage online at IPL in K. */
++    return (uint64_t)((int)((char *__ptr32 *__ptr32 *)0)[4][214]) * 1024;
++}
++
+ // ggml-backend interface
+
+ std::vector<ggml_backend_buffer_type_t>& ggml_backend_cpu_get_extra_buffers_type() {
+@@ -43,7 +75,7 @@ std::vector<ggml_backend_buffer_type_t>& ggml_backend_cpu_get_extra_buffers_type
+         if (ggml_backend_amx_buffer_type()) {
+             bufts.push_back(ggml_backend_amx_buffer_type());
+         }
+-#endif
++#endif
+
+ #ifdef GGML_USE_CPU_KLEIDIAI
+         if (ggml_backend_cpu_kleidiai_buffer_type()) {
+@@ -340,6 +372,9 @@ static void ggml_backend_cpu_device_get_memory(ggml_backend_dev_t dev, size_t *
+     GlobalMemoryStatusEx(&status);
+     *total = status.ullTotalPhys;
+     *free = status.ullAvailPhys;
++#elifdef __MVS__
++    *total = get_total_memory();
++    *free = get_free_memory();
+ #else
+     long pages = sysconf(_SC_PHYS_PAGES);
+     long page_size = sysconf(_SC_PAGE_SIZE);
