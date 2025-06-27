@@ -1,0 +1,13 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+index 0d0daa3..423daea 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -195,6 +195,8 @@ bool common_has_curl() {
+ #   endif
+ #elif defined(_AIX)
+ #include <sys/limits.h>
++#elif defined(__MVS__)
++#include <limits.h>
+ #else
+ #include <sys/syslimits.h>
+ #endif
