@@ -1,0 +1,24 @@
+diff --git a/vendor/miniaudio/miniaudio.h b/vendor/miniaudio/miniaudio.h
+index c74bebe..72cbafd 100644
+--- a/vendor/miniaudio/miniaudio.h
++++ b/vendor/miniaudio/miniaudio.h
+@@ -3873,8 +3873,8 @@ typedef ma_uint16 wchar_t;
+     #define MA_POSIX
+
+     /*
+-    Use the MA_NO_PTHREAD_IN_HEADER option at your own risk. This is intentionally undocumented.
+-    You can use this to avoid including pthread.h in the header section. The downside is that it
++##    Use the MA_NO_PTHREAD_IN_HEADER option at your own risk. This is intentionally undocumented.
++    You can use this to avoid including pthread.h in the header section. The downside is that it##
+     results in some fixed sized structures being declared for the various types that are used in
+     miniaudio. The risk here is that these types might be too small for a given platform. This
+     risk is yours to take and no support will be offered if you enable this option.
+@@ -16176,7 +16176,7 @@ static ma_result ma_thread_create__posix(ma_thread* pThread, ma_thread_priority
+     int result;
+     pthread_attr_t* pAttr = NULL;
+
+-#if !defined(__EMSCRIPTEN__) && !defined(__3DS__)
++#if !defined(__EMSCRIPTEN__) && !defined(__3DS__) && !defined(__MVS__)
+     /* Try setting the thread priority. It's not critical if anything fails here. */
+     pthread_attr_t attr;
+     if (pthread_attr_init(&attr) == 0) {
