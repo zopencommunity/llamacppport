@@ -1,0 +1,22 @@
+diff --git a/tools/run/run.cpp b/tools/run/run.cpp
+index 6fe728c6..9ee09d80 100644
+--- a/tools/run/run.cpp
++++ b/tools/run/run.cpp
+@@ -22,6 +22,9 @@
+
+ #if defined(LLAMA_USE_CURL)
+ #    include <curl/curl.h>
++#    if defined(__MVS__)
++#    include <cstdlib>
++#    endif
+ #endif
+
+ #include <signal.h>
+@@ -507,6 +510,7 @@ class HttpClient {
+         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+         curl_easy_setopt(curl, CURLOPT_DEFAULT_PROTOCOL, "https");
+         curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
++	curl_easy_setopt(curl, CURLOPT_CAINFO, std::getenv("SSL_CERT_PATH"));
+         return curl_easy_perform(curl);
+     }
+
