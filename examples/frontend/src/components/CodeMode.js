@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'; // Import useCallback
 import './CodeMode.css';
+import CONFIG from '../config';
 import { parseAdvancedText } from './utils';
 
 const CodeMode = ({ mode, codeResultShown, setCodeResultShown }) => {
@@ -165,7 +166,7 @@ const CodeMode = ({ mode, codeResultShown, setCodeResultShown }) => {
     }
 
     try {
-      const res = await fetch(`http://192.86.32.208:21098/tools/${endpoint}`, {
+      const res = await fetch(`${CONFIG.API_BASE_URL}/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...body, question: question })

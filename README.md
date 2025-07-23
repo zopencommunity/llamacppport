@@ -8,7 +8,7 @@ Enable AI inferencing on z/os
 
 Use the zopen package manager ([QuickStart Guide](https://zopen.community/#/Guides/QuickStart)) to install:
 ```bash
-zopen install llama.cpp
+zopen install llamacpp
 ```
 
 # Building from Source

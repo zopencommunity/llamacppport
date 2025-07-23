@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ChatMode.css';
+import CONFIG from '../config';
 import { parseAdvancedText } from './utils';
 
 const ChatMode = ({ conversationStarted, setConversationStarted }) => {
@@ -62,7 +63,7 @@ const ChatMode = ({ conversationStarted, setConversationStarted }) => {
     setIsTyping(true);
 
     try {
-      const response = await fetch("http://192.86.32.208:21098/tools/chat", {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/tools/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: input })

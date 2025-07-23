@@ -37,7 +37,7 @@ export function parseFormattedText(content) {
     if (/^#{1,6} /.test(trimmed)) {
       const level = trimmed.match(/^#+/)[0].length;
       const content = escapeHTML(trimmed.replace(/^#+ /, ''));
-      html += `<h${level} style="margin:8px 0;">${content}</h${level}>`;
+      html += `<h${level-2} style="margin:8px 0;">${content}</h${level}>`;
       continue;
     }
 
