@@ -42,7 +42,7 @@ The **Model Context Protocol (MCP)** is implemented here to orchestrate the rout
 
 > Folder structure details are explained in `docs/STRUCTURE.md`
 
-![Workflow](docs/images/workflow.png)
+![Workflow](docs/media/images/workflow.png)
 
 ## Setup
 
