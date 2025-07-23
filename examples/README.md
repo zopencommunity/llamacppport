@@ -15,6 +15,7 @@ This project features:
 
 The files can be extracted from the repositories in `zopencommunity` or the `local file system`.
 > For usage examples and UI walkthroughs, see `docs/WEBUI.md`
+<!-- > Video Demonstration in `docs/videos/Final Use Cases Demo.mp4` -->
 
 ## Prerequisites
 
@@ -42,7 +43,7 @@ The **Model Context Protocol (MCP)** is implemented here to orchestrate the rout
 
 > Folder structure details are explained in `docs/STRUCTURE.md`
 
-![Workflow](docs/media/images/workflow.png)
+![Workflow](docs/images/workflow.png)
 
 ## Setup
 
