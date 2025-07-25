@@ -1,5 +1,6 @@
 *	text	working-tree-encoding=ISO8859-1
-*.pem   text working-tree-encoding=UTF-8
-*.png   binary
-*.gif binary
+*.pem text working-tree-encoding=UTF-8
+*.png -text
+*.gif -text
+*.mp4 -text
 *.pax.Z binary

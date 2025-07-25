@@ -1,0 +1,169 @@
+diff --git a/vendor/cpp-httplib/httplib.h b/vendor/cpp-httplib/httplib.h
+index 0aa4e62..cbc6ece 100644
+--- a/vendor/cpp-httplib/httplib.h
++++ b/vendor/cpp-httplib/httplib.h
+@@ -7,6 +7,7 @@
+ 
+ #ifndef CPPHTTPLIB_HTTPLIB_H
+ #define CPPHTTPLIB_HTTPLIB_H
++#endif
+ 
+ #define CPPHTTPLIB_VERSION "0.20.1"
+ 
+@@ -211,6 +212,9 @@ using socklen_t = int;
+ #endif
+ #ifdef __MVS__
+ #include <strings.h>
++#include <zos-tls.h>
++#include <sys/time.h>
++#include <regex>
+ #ifndef NI_MAXHOST
+ #define NI_MAXHOST 1025
+ #endif
+@@ -2958,7 +2962,12 @@ inline std::string decode_url(const std::string &s,
+ 
+ inline std::string file_extension(const std::string &path) {
+   std::smatch m;
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(std::regex("\\.([a-zA-Z0-9]+$"));
++  std::regex& re = *re_storage.access();
++#else
+   thread_local auto re = std::regex("\\.([a-zA-Z0-9]+)$");
++#endif
+   if (std::regex_search(path, m, re)) { return m[1].str(); }
+   return std::string();
+ }
+@@ -5031,9 +5040,16 @@ public:
+             file_.content_type =
+                 trim_copy(header.substr(str_len(header_content_type)));
+           } else {
+-            thread_local const std::regex re_content_disposition(
++#ifdef __MVS__
++		static __tlssim<std::regex> re_content_disposition_storage(std::regex(
++		R"~(^Content-Disposition:\s*form-data;\s*(.*)$)~",
++		std::regex_constants::icase));
++		std::regex& re_content_disposition = *re_content_disposition_storage.access();
++#else
++		thread_local const std::regex re_content_disposition(
+                 R"~(^Content-Disposition:\s*form-data;\s*(.*)$)~",
+                 std::regex_constants::icase);
++#endif
+ 
+             std::smatch m;
+             if (std::regex_match(header, m, re_content_disposition)) {
+@@ -5054,8 +5070,14 @@ public:
+               it = params.find("filename*");
+               if (it != params.end()) {
+                 // Only allow UTF-8 encoding...
++#ifdef __MVS__
++		static __tlssim<std::regex> re_rfc_5987_encoding_storage(
++			std::regex(R"~(^UTF-8''(.+?)$)~", std::regex_constants::icase));
++		std::regex& re_rfc5987_encoding = *re_rfc_5987_encoding_storage.access();
++#else
+                 thread_local const std::regex re_rfc5987_encoding(
+                     R"~(^UTF-8''(.+?)$)~", std::regex_constants::icase);
++#endif
+ 
+                 std::smatch m2;
+                 if (std::regex_match(it->second, m2, re_rfc5987_encoding)) {
+@@ -5219,6 +5241,14 @@ inline std::string random_string(size_t length) {
+   constexpr const char data[] =
+       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+ 
++#ifdef __MVS__
++  static __tlssim<std::mt19937> engine_storage([]()  {
++	std::random_device seed_gen;
++	std::seed_seq seed_sequence{seed_gen(), seed_gen(), seed_gen(), seed_gen()};
++	return std::mt19937(seed_sequence);
++  }());
++  std::mt19937& engine = *engine_storage.access();
++#else
+   thread_local auto engine([]() {
+     // std::random_device might actually be deterministic on some
+     // platforms, but due to lack of support in the c++ standard library,
+@@ -5228,6 +5258,7 @@ inline std::string random_string(size_t length) {
+     std::seed_seq seed_sequence{seed_gen(), seed_gen(), seed_gen(), seed_gen()};
+     return std::mt19937(seed_sequence);
+   }());
++#endif
+ 
+   std::string result;
+   for (size_t i = 0; i < length; i++) {
+@@ -5741,8 +5772,14 @@ inline bool parse_www_authenticate(const Response &res,
+                                    bool is_proxy) {
+   auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
+   if (res.has_header(auth_key)) {
++#ifdef __MVS__
++    static __tlssim<std::regex> re_storage(
++	std::regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~"));
++    std::regex& re = *re_storage.access();
++#else
+     thread_local auto re =
+         std::regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
++#endif
+     auto s = res.get_header_value(auth_key);
+     auto pos = s.find(' ');
+     if (pos != std::string::npos) {
+@@ -5826,7 +5863,12 @@ inline void hosted_at(const std::string &hostname,
+ inline std::string append_query_params(const std::string &path,
+                                        const Params &params) {
+   std::string path_with_query = path;
+-  thread_local const std::regex re("[^?]+\\?.*");
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(std::regex("[^?]+\\?.*"));
++  std::regex& re = *re_storage.access();
++#else
++  thread_local std::regex re("[^?]+\\?.*");
++#endif
+   auto delm = std::regex_match(path, re) ? '&' : '?';
+   path_with_query += delm + detail::params_to_query_str(params);
+   return path_with_query;
+@@ -6602,9 +6644,16 @@ inline bool Server::parse_request_line(const char *s, Request &req) const {
+     if (count != 3) { return false; }
+   }
+ 
++#ifdef __MVS__
++  static __tlssim<std::set<std::string>> methods_storage(
++	std::set<std::string>{"GET", "HEAD", "POST", "PUT", "DELETE",
++		"CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"});
++  std::set<std::string>& methods = *methods_storage.access();
++#else
+   thread_local const std::set<std::string> methods{
+       "GET",     "HEAD",    "POST",  "PUT",   "DELETE",
+       "CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
++#endif
+ 
+   if (methods.find(req.method) == methods.end()) { return false; }
+ 
+@@ -7603,7 +7652,16 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
+   if (!line_reader.getline()) { return false; }
+ 
+ #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(std::regex("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n"));
++  std::regex& re = *re_storage.access();
++#else
+   thread_local const std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
++#endif
++#else
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(std::regex("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n"));
++  std::regex& re = *re_storage.access();
+ #else
+   thread_local const std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+ #endif
+@@ -7837,8 +7895,14 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
+   auto location = res.get_header_value("location");
+   if (location.empty()) { return false; }
+ 
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(
++	std::regex(R"((?:https?):)?(?://(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)"));
++  std::regex& re = *re_storage.access();
++#else
+   thread_local const std::regex re(
+       R"((?:(https?):)?(?://(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
++#endif
+ 
+   std::smatch m;
+   if (!std::regex_match(location, m, re)) { return false; }

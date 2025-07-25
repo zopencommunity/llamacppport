@@ -1,0 +1,44 @@
+diff --git a/ggml/src/ggml.c b/ggml/src/ggml.c
+index 97da26b3..212faf9c 100644
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -14,9 +14,13 @@
+ #include <hbwmalloc.h>
+ #endif
+
++#if defined(__MVS__)
++#include <zos-base.h>
++#endif
++
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+ #include <malloc.h> // using malloc.h with MSC/MINGW
+-#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
++#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__MVS__)
+ #include <alloca.h>
+ #endif
+
+@@ -299,6 +303,15 @@ void * ggml_aligned_malloc(size_t size) {
+
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+     return _aligned_malloc(size, alignment);
++#elif defined(__MVS__)
++//    void * aligned_memory = NULL;
++//    if (size ==0)
++//         size = 1;
++//    aligned_memory = malloc(size);
++//    int result = 0;
++//    if (aligned_memory == NULL)
++//         result = errno;
++    return __aligned_malloc(size, alignment);
+ #else
+     if (size == 0) {
+         GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
+@@ -350,6 +363,8 @@ void ggml_aligned_free(void * ptr, size_t size) {
+     GGML_UNUSED(size);
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+     _aligned_free(ptr);
++#elif defined(__MVS__)
++    __aligned_free(ptr);
+ #elif GGML_USE_CPU_HBM
+     if (ptr != NULL) {
+         hbw_free(ptr);

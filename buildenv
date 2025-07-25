@@ -1,21 +1,23 @@
 export ZOPEN_BUILD_LINE="DEV"
-export ZOPEN_STABLE_DEPS="zoslib make cmake"
+export ZOPEN_STABLE_DEPS="zoslib make cmake curl"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
-export ZOPEN_DEV_DEPS="zoslib make cmake"
+export ZOPEN_DEV_DEPS="zoslib make cmake curl openssl libssh2 zlib libpsl"
 export ZOPEN_CATEGORIES="ai"
-export ZOPEN_DEV_TAG="master-9e232f0"
-export ZOPEN_BUILD_LINE="DEV"
+export ZOPEN_DEV_TAG="master"
 export ZOPEN_NAME="llamacpp-master"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
-rm -f "llama"
-ln -s "llama.cpp" "llama"
-ln -s "llama.cpp" $ZOPEN_NAME
+# rm -f "llama"
+# ln -s "llama.cpp" "llama"
+# ln -s "llama.cpp" $ZOPEN_NAME
 
 export ZOPEN_COMP="CLANG"
+# set env variables
+# export CURL_HOME="/data/zopen/usr/local/zopen/curl/curl"
+# export BLAS_HOME="/usr/lpp/cbclib"
 
 export ZOPEN_CONFIGURE="cmake"
-export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" ."
+export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" -DCURL_LIBRARY=\$CURL_HOME/lib/libcurl.a -DCURL_INCLUDE_DIR=\$CURL_HOME/include -DBUILD_SHARED_LIBS_DEFAULT=OFF -DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DGGML_BACKEND_DL=OFF -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS=\$BLAS_HOME/include/openblas -DBLAS_LIBRARIES=\$BLAS_HOME/lib/libopenblas.so -DLLAMA_BUILD_TESTS=ON ."
 
 export ZOPEN_MAKE="cmake"
 export ZOPEN_MAKE_OPTS="--build ../build --parallel \$ZOPEN_NUM_JOBS --config Release"
@@ -24,13 +26,13 @@ export ZOPEN_MAKE_MINIMAL=Y
 export ZOPEN_INSTALL="cmake"
 export ZOPEN_INSTALL_OPTS="--install ../build"
 
-# Needs more testing
-if false; then
-  export ZOPEN_EXTRA_CPPFLAGS="-DGGML_USE_OPENBLAS -I /home/itodoro/projects/openblas/openblas/include/openblas -mvx -mzvector -march=z15"
-  export ZOPEN_EXTRA_LIBS="/home/itodoro/projects/openblas/openblas/libopenblas.x"
-fi
+export ZOPEN_CHECK="ctest"
+export ZOPEN_CHECK_OPTS="--test-dir ../build  --output-on-failure"
 
-export ZOPEN_CHECK="skip"
+# if false; then
+#  export ZOPEN_EXTRA_CPPFLAGS="-DGGML_USE_OPENBLAS -I /home/itodoro/projects/openblas/openblas/include/openblas -mvx -mzvector -march=z15"
+#  export ZOPEN_EXTRA_LIBS="/home/itodoro/projects/openblas/openblas/libopenblas.x"
+# fi
 
 zopen_check_results()
 {
@@ -38,11 +40,25 @@ zopen_check_results()
   pfx="$2"
   chk="$1/$2_check.log"
 
+  if [[ -f "$chk" ]]; then
+    total=$(grep -cE "Test #[0-9]+" "$chk")
+    failed=$(grep -cE "Failed|Subprocess aborted" "$chk")
+    skipped=$(grep -c "Skipped" "$chk")
+    passed=$((total - failed - skipped))
+  else
+    total=0
+    passed=0
+    failed=0
+    skipped=0
+  fi
+
   # Echo the following information to gauge build health
-  echo "actualFailures:0"
-  echo "totalTests:1"
+  echo "actualFailures:$failed"
+  echo "actualPassed:$passed"
+  echo "actualSkipped:$skipped"
+  echo "totalTests:$total"
   echo "expectedFailures:0"
-  echo "expectedTotalTests:1"
+  echo "expectedTotalTests:$total"
 }
 
 zopen_append_to_env()

@@ -1,0 +1,72 @@
+/* Main application layout */
+.main-container {
+  display: flex;
+  min-height: calc(100vh - 350px);
+  position: relative;
+  justify-content: center;
+}
+
+/* Content Area */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  transition: all 0.3s ease;
+  margin-left: 0;
+  width: 100%;
+}
+
+/* Initial State */
+.initial-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin-top: 5px;
+  transition: all 0.3s ease;
+}
+
+.initial-state.hidden {
+  display: none;
+}
+
+.initial-state p {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+  color: #0033a1;
+}
+
+.center-buttons {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.center-buttons button {
+  font-family: 'Montserrat', sans-serif;
+  padding: 12px 25px;
+  font-size: 1rem;
+  background-color: white;
+  border: 2px solid #ffffff;
+  transition: all 0.3s ease;
+  border-radius: 20px;
+  color: #0033a1;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.center-buttons button:hover {
+  background-color: #0033a1;
+  color: white;
+  transform: scale(1.05);
+}
+
+.center-buttons button.active {
+  background-color: #0033a1;
+  color: white;
+  font-weight: bold;
+}
