@@ -10,7 +10,7 @@ index 40af7e57..46fec792 100644
 +#   include <cstdlib>
 +#   endif
  #endif
-
+ 
  using json = nlohmann::ordered_json;
 @@ -195,6 +198,8 @@ bool common_has_curl() {
  #   endif

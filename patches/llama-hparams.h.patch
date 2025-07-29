@@ -1,0 +1,12 @@
+diff --git a/src/llama-hparams.h b/src/llama-hparams.h
+index 8b7e2a11..530dfea2 100644
+--- a/src/llama-hparams.h
++++ b/src/llama-hparams.h
+@@ -3,6 +3,7 @@
+ #include "llama.h"
+ 
+ #include <array>
++#include <algorithm>
+ 
+ // bump if necessary
+ #define LLAMA_MAX_LAYERS  512

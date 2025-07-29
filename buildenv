@@ -7,14 +7,14 @@ export ZOPEN_DEV_TAG="master"
 export ZOPEN_NAME="llamacpp-master"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
-# rm -f "llama"
-# ln -s "llama.cpp" "llama"
-# ln -s "llama.cpp" $ZOPEN_NAME
+rm -f "llama"
+ln -s "llama.cpp" "llama"
+ln -s "llama.cpp" $ZOPEN_NAME
 
 export ZOPEN_COMP="CLANG"
 # set env variables
 # export CURL_HOME="/data/zopen/usr/local/zopen/curl/curl"
-# export BLAS_HOME="/usr/lpp/cbclib"
+export BLAS_HOME="/usr/lpp/cbclib"
 
 export ZOPEN_CONFIGURE="cmake"
 export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" -DCURL_LIBRARY=\$CURL_HOME/lib/libcurl.a -DCURL_INCLUDE_DIR=\$CURL_HOME/include -DBUILD_SHARED_LIBS_DEFAULT=OFF -DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DGGML_BACKEND_DL=OFF -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS=\$BLAS_HOME/include/openblas -DBLAS_LIBRARIES=\$BLAS_HOME/lib/libopenblas.so -DLLAMA_BUILD_TESTS=ON ."

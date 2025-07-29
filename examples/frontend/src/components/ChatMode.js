@@ -139,7 +139,7 @@ const ChatMode = ({ conversationStarted, setConversationStarted }) => {
             onClick={handleChatSubmit}
             disabled={isTyping}
           >
-            â¤
+            Ã¢ÂÂ¤
           </button>
         </div>
       </div>

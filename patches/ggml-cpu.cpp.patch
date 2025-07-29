@@ -5,10 +5,10 @@ index e013e8b..6290b22 100644
 @@ -33,6 +33,38 @@
  #    include <sys/types.h>
  #endif
-
-+#define CVT_PTR        0x10
-+#define CVTRCEP_OFFSET         0x490
-+#define RCEAFC_OFFSET  0x088
+ 
++#define CVT_PTR 	0x10
++#define CVTRCEP_OFFSET 	0x490
++#define RCEAFC_OFFSET 	0x088
 +
 +typedef unsigned data_area_ptr_assign_type;
 +
@@ -17,7 +17,7 @@ index e013e8b..6290b22 100644
 +#if defined(_LP64)
 +        data_area_ptr_assign_type lower;
 +#endif
-+       data_area_ptr_assign_type assign;
++	data_area_ptr_assign_type assign;
 +    };
 +    char* deref;
 +} data_area_ptr;
@@ -39,15 +39,15 @@ index e013e8b..6290b22 100644
 +}
 +
  // ggml-backend interface
-
+ 
  std::vector<ggml_backend_buffer_type_t>& ggml_backend_cpu_get_extra_buffers_type() {
 @@ -43,7 +75,7 @@ std::vector<ggml_backend_buffer_type_t>& ggml_backend_cpu_get_extra_buffers_type
          if (ggml_backend_amx_buffer_type()) {
              bufts.push_back(ggml_backend_amx_buffer_type());
          }
 -#endif
-+#endif
-
++#endif	
+ 
  #ifdef GGML_USE_CPU_KLEIDIAI
          if (ggml_backend_cpu_kleidiai_buffer_type()) {
 @@ -340,6 +372,9 @@ static void ggml_backend_cpu_device_get_memory(ggml_backend_dev_t dev, size_t *

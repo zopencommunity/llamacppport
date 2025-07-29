@@ -5,7 +5,7 @@ index 97da26b3..212faf9c 100644
 @@ -14,9 +14,13 @@
  #include <hbwmalloc.h>
  #endif
-
+ 
 +#if defined(__MVS__)
 +#include <zos-base.h>
 +#endif
@@ -16,19 +16,19 @@ index 97da26b3..212faf9c 100644
 +#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__MVS__)
  #include <alloca.h>
  #endif
-
+ 
 @@ -299,6 +303,15 @@ void * ggml_aligned_malloc(size_t size) {
-
+ 
  #if defined(_MSC_VER) || defined(__MINGW32__)
      return _aligned_malloc(size, alignment);
 +#elif defined(__MVS__)
 +//    void * aligned_memory = NULL;
 +//    if (size ==0)
-+//         size = 1;
++//	    size = 1;
 +//    aligned_memory = malloc(size);
 +//    int result = 0;
 +//    if (aligned_memory == NULL)
-+//         result = errno;
++//	    result = errno;
 +    return __aligned_malloc(size, alignment);
  #else
      if (size == 0) {

@@ -4,12 +4,12 @@ index 405d8e3..b3682a9 100644
 +++ b/ggml/src/ggml-backend-reg.cpp
 @@ -556,7 +556,9 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
  }
-
+ 
  void ggml_backend_load_all() {
 -    ggml_backend_load_all_from_path(nullptr);
 +#ifdef GGML_BACKEND_DL
 +     ggml_backend_load_all_from_path(nullptr);
 +#endif
  }
-
+ 
  void ggml_backend_load_all_from_path(const char * dir_path) {
