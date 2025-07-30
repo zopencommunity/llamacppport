@@ -1,0 +1,12 @@
+diff --git a/tools/export-lora/export-lora.cpp b/tools/export-lora/export-lora.cpp
+index f038019b..bf750ab9 100644
+--- a/tools/export-lora/export-lora.cpp
++++ b/tools/export-lora/export-lora.cpp
+@@ -50,6 +50,7 @@ static struct gguf_context * load_gguf(std::string & fname, struct ggml_context
+     struct gguf_init_params params = {
+         /*.no_alloc = */ true,
+         /*.ctx      = */ ctx_ggml,
++	/*.allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(fname.c_str(), params);
+     if (!ctx_gguf) {

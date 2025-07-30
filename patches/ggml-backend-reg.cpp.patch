@@ -1,8 +1,8 @@
 diff --git a/ggml/src/ggml-backend-reg.cpp b/ggml/src/ggml-backend-reg.cpp
-index 405d8e3..b3682a9 100644
+index f0cdac31..29247c6a 100644
 --- a/ggml/src/ggml-backend-reg.cpp
 +++ b/ggml/src/ggml-backend-reg.cpp
-@@ -556,7 +556,9 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
+@@ -561,7 +561,9 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
  }
  
  void ggml_backend_load_all() {

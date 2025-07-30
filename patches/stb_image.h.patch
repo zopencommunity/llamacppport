@@ -1,5 +1,5 @@
 diff --git a/vendor/stb/stb_image.h b/vendor/stb/stb_image.h
-index 9eedabe..92d5251 100644
+index 9eedabed..92d52515 100644
 --- a/vendor/stb/stb_image.h
 +++ b/vendor/stb/stb_image.h
 @@ -620,6 +620,10 @@ STBIDEF int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const ch

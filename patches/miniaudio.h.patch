@@ -1,5 +1,5 @@
 diff --git a/vendor/miniaudio/miniaudio.h b/vendor/miniaudio/miniaudio.h
-index c74bebe..72cbafd 100644
+index c74bebeb..72cbafd5 100644
 --- a/vendor/miniaudio/miniaudio.h
 +++ b/vendor/miniaudio/miniaudio.h
 @@ -3873,8 +3873,8 @@ typedef ma_uint16 wchar_t;

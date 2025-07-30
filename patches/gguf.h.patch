@@ -1,0 +1,23 @@
+diff --git a/ggml/include/gguf.h b/ggml/include/gguf.h
+index 79ee2020..236205c4 100644
+--- a/ggml/include/gguf.h
++++ b/ggml/include/gguf.h
+@@ -74,6 +74,8 @@ extern "C" {
+ 
+         // if not NULL, create a ggml_context and allocate the tensor data in it
+         struct ggml_context ** ctx;
++
++	bool allow_byteswapping;
+     };
+ 
+     GGML_API struct gguf_context * gguf_init_empty(void);
+@@ -197,6 +199,9 @@ extern "C" {
+     // writes the meta data to pointer "data"
+     GGML_API void   gguf_get_meta_data(const struct gguf_context * ctx, void * data);
+ 
++    // returns true if gguf file needs byteswapping when reading. Byteswapping for writing not implemented
++    GGML_API bool gguf_needs_byteswap(const struct gguf_context * ctx);
++
+ #ifdef  __cplusplus
+ }
+ #endif

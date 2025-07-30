@@ -1,8 +1,8 @@
 diff --git a/common/common.cpp b/common/common.cpp
-index 4cc40ed..234ad95 100644
+index d8c4d988..00aa7d43 100644
 --- a/common/common.cpp
 +++ b/common/common.cpp
-@@ -851,7 +851,7 @@ std::string fs_get_cache_directory() {
+@@ -874,7 +874,7 @@ std::string fs_get_cache_directory() {
      if (getenv("LLAMA_CACHE")) {
          cache_directory = std::getenv("LLAMA_CACHE");
      } else {
@@ -11,3 +11,11 @@ index 4cc40ed..234ad95 100644
          if (std::getenv("XDG_CACHE_HOME")) {
              cache_directory = std::getenv("XDG_CACHE_HOME");
          } else {
+@@ -1436,6 +1436,7 @@ static common_control_vector_data common_control_vector_load_one(const common_co
+     struct gguf_init_params meta_gguf_params = {
+         /* .no_alloc = */ false,
+         /* .ctx      = */ &ctx,
++	/* .allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
+     if (!ctx_gguf) {
