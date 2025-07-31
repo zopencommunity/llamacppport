@@ -1,0 +1,31 @@
+diff --git a/ggml/src/ggml-cpu/ggml-cpu-impl.h b/ggml/src/ggml-cpu/ggml-cpu-impl.h
+index d839cf5c..3f8532f7 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu-impl.h
++++ b/ggml/src/ggml-cpu/ggml-cpu-impl.h
+@@ -68,6 +68,15 @@ struct ggml_compute_params {
+ #endif  // __VXE2__
+ #endif  // __s390x__ && __VEC__
+ 
++#if defined(__MVS__) && defined(__VEC__)
++#ifndef __VXE__
++#define __VXE__
++#endif  // __VXE__
++#ifndef __VXE2__
++#define __VXE2__
++#endif  // __VXE2__
++#endif  // __MVS__ && __VEC__
++
+ #if defined(__s390x__) && defined(GGML_NNPA)
+ #ifndef __NNPA__
+ #define __NNPA__
+@@ -352,8 +361,9 @@ inline static int32x4_t ggml_vdotq_s32(int32x4_t acc, int8x16_t a, int8x16_t b)
+ #endif
+ 
+ #if defined(__VXE__) || defined(__VXE2__)
++#ifndef __VEC__
+ #include <vecintrin.h>
+-
++#endif
+ #define vec_neg(a)    (-(a))                // Vector Negate
+ #define vec_add(a, b) ((a) + (b))           // Vector Add
+ #define vec_sub(a, b) ((a) - (b))           // Vector Subtract

@@ -3,7 +3,7 @@ export ZOPEN_STABLE_DEPS="zoslib make cmake curl"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_DEPS="zoslib make cmake curl openssl libssh2 zlib libpsl"
 export ZOPEN_CATEGORIES="ai"
-export ZOPEN_DEV_TAG="master"
+export ZOPEN_DEV_TAG="b6027"
 export ZOPEN_NAME="llamacpp-master"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
@@ -65,24 +65,25 @@ zopen_check_results()
 
 zopen_pre_check()
 {
-unset SSL_CERT_FILE
+# unset SSL_CERT_FILE
 unset SSL_CERT_PATH
+export SSL_CERT_PATH=$(curl-config --ca)
 export CFLAGS="$CFLAGS -march=z15 -mzvector"
 export CPPFLAGS="$CPPFLAGS -march=z15"
 }
 
-zopen_append_to_env()
-{
-export SSL_CERT_PATH=$(curl-config --ca)
-  # echo envars outside of PATH, MANPATH, LIBPATH
-}
+# zopen_append_to_env()
+# {
+#  export SSL_CERT_PATH=$(curl-config --ca)
+#  # echo envars outside of PATH, MANPATH, LIBPATH
+# }
 
-zopen_append_to_zoslib_env()
-{
-cat<<EOF
-SSL_CERT_PATH|set|$(curl-config --ca)
-EOF
-}
+# zopen_append_to_zoslib_env()
+# {
+#  cat<<EOF
+#  SSL_CERT_PATH|set|$(curl-config --ca)
+#  EOF
+# }
 
 zopen_append_to_setup()
 {

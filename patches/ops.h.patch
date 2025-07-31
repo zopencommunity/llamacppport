@@ -1,0 +1,12 @@
+diff --git a/ggml/src/ggml-cpu/ops.h b/ggml/src/ggml-cpu/ops.h
+index 3a32ec20..3677919b 100644
+--- a/ggml/src/ggml-cpu/ops.h
++++ b/ggml/src/ggml-cpu/ops.h
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include <mass.h>
++
+ #include "ggml.h"
+ 
+ //
