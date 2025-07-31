@@ -1,0 +1,12 @@
+diff --git a/tools/imatrix/imatrix.cpp b/tools/imatrix/imatrix.cpp
+index 9aad3711..a11c2548 100644
+--- a/tools/imatrix/imatrix.cpp
++++ b/tools/imatrix/imatrix.cpp
+@@ -700,6 +700,7 @@ bool IMatrixCollector::load_imatrix(const char * file_name) {
+     struct gguf_init_params meta_gguf_params = {
+         /* .no_alloc = */ false, // the data is needed
+         /* .ctx      = */ &ctx,
++	/* .allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(file_name, meta_gguf_params);
+     if (!ctx_gguf) {

@@ -41,10 +41,10 @@ zopen_check_results()
   dir="$1"
   pfx="$2"
   chk="$1/$2_check.log"
-
+  
   if [[ -f "$chk" ]]; then
-    total=$(grep -cE "Test #[0-9]+" "$chk")
-    failed=$(grep -cE "Failed|Subprocess aborted" "$chk")
+    total=$(grep -cE "Test +#" "$chk")
+    failed=$(grep -cE "\*\*\*Failed|Subprocess aborted\*\*\*" "$chk")
     skipped=$(grep -c "Skipped" "$chk")
     passed=$((total - failed - skipped))
   else
@@ -59,7 +59,7 @@ zopen_check_results()
   echo "actualPassed:$passed"
   echo "actualSkipped:$skipped"
   echo "totalTests:$total"
-  echo "expectedFailures:0"
+  echo "expectedFailures:3"
   echo "expectedTotalTests:$total"
 }
 

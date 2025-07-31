@@ -1,0 +1,12 @@
+diff --git a/tools/quantize/quantize.cpp b/tools/quantize/quantize.cpp
+index 45c59ecb..b99ae61d 100644
+--- a/tools/quantize/quantize.cpp
++++ b/tools/quantize/quantize.cpp
+@@ -219,6 +219,7 @@ static int load_imatrix(const std::string & imatrix_file, std::vector<std::strin
+     struct gguf_init_params meta_gguf_params = {
+         /* .no_alloc = */ false, // the data is needed
+         /* .ctx      = */ &ctx,
++	/* .allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(imatrix_file.c_str(), meta_gguf_params);
+     if (!ctx_gguf) {
