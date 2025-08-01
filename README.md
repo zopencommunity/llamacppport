@@ -2,7 +2,7 @@
 
 # llama.cpp
 
-Enable AI inferencing on z/os
+Enable AI inferencing on z/OS
 
 # Installation and Usage
 
@@ -27,8 +27,9 @@ See the [zopen porting guide](https://zopen.community/#/Guides/Porting) for more
 
 # Documentation
 
-
 # Troubleshooting
+
+While building if an error is encountered in the `ggml-cpu.cpp` file (perhaps related to pthread), run `zopen upgrade zoslib -y` and try building again.
 
 # Contributing
 Contributions are welcome! Please follow the [zopen contribution guidelines](https://github.com/zopencommunity/meta/blob/main/CONTRIBUTING.md).

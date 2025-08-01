@@ -7,7 +7,7 @@ export ZOPEN_DEV_TAG="b6027"
 export ZOPEN_NAME="llamacpp-master"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
-export ZOPEN_SKIP_ZOSLIB_ENV_HOOK=1
+# export ZOPEN_SKIP_ZOSLIB_ENV_HOOK=1
 
 rm -f "llama"
 ln -s "llama.cpp" "llama"
