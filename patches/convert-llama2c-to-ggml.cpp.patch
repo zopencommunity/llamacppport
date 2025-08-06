@@ -1,0 +1,12 @@
+diff --git a/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp b/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
+index bdf0eed2..b36170bc 100644
+--- a/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
++++ b/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
+@@ -535,6 +535,7 @@ static void load_vocab(const char * filename, const Config * config, struct my_l
+         struct gguf_init_params params = {
+             /*.no_alloc = */ false,
+             /*.ctx      = */ &ctx_data,
++	    /*.allow_byteswapping = */ true,
+         };
+ 
+         struct gguf_context * ctx = gguf_init_from_file(filename, params);

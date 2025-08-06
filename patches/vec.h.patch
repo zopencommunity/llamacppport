@@ -1,0 +1,10 @@
+diff --git a/ggml/src/ggml-cpu/vec.h b/ggml/src/ggml-cpu/vec.h
+index c432c990..b144a518 100644
+--- a/ggml/src/ggml-cpu/vec.h
++++ b/ggml/src/ggml-cpu/vec.h
+@@ -1,4 +1,5 @@
+ // Vectorized functions for fundamental operations
++#include <mass.h>
+ 
+ #pragma once
+ 

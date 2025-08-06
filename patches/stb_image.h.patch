@@ -1,11 +1,11 @@
 diff --git a/vendor/stb/stb_image.h b/vendor/stb/stb_image.h
-index 9eedabe..92d5251 100644
+index 9eedabed..92d52515 100644
 --- a/vendor/stb/stb_image.h
 +++ b/vendor/stb/stb_image.h
 @@ -620,6 +620,10 @@ STBIDEF int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const ch
     #define stbi_inline __forceinline
  #endif
-
+ 
 +#ifdef __MVS__
 +   #define STBI_NO_THREAD_LOCALS
 +#endif
@@ -16,7 +16,7 @@ index 9eedabe..92d5251 100644
 @@ -721,6 +725,10 @@ typedef unsigned char validate_uint32[sizeof(stbi__uint32)==4 ? 1 : -1];
  #define STBI_NO_SIMD
  #endif
-
+ 
 +#if defined(__MVS__)
 +#include <zos-tls.h>
 +#endif
@@ -27,7 +27,7 @@ index 9eedabe..92d5251 100644
 @@ -963,11 +971,33 @@ static int      stbi__pnm_info(stbi__context *s, int *x, int *y, int *comp);
  static int      stbi__pnm_is16(stbi__context *s);
  #endif
-
+ 
 +#if defined(__MVS__)
 +static __tlssim<const char*> stbi__g_failure_reason_tls("");
 +#define stbi__g_failure_reason (*stbi__g_failure_reason_tls.access())
@@ -55,6 +55,6 @@ index 9eedabe..92d5251 100644
  #endif
  const char *stbi__g_failure_reason;
 +#endif
-
+ 
  STBIDEF const char *stbi_failure_reason(void)
  {

@@ -1,0 +1,15 @@
+diff --git a/ggml/src/ggml-cpu/llamafile/sgemm.h b/ggml/src/ggml-cpu/llamafile/sgemm.h
+index 729e8853..c85a67dd 100644
+--- a/ggml/src/ggml-cpu/llamafile/sgemm.h
++++ b/ggml/src/ggml-cpu/llamafile/sgemm.h
+@@ -3,8 +3,10 @@
+ #include <stdbool.h>
+ 
+ #if defined(__VXE__) || defined(__VXE2__)
++#ifndef __VEC__
+ #include <vecintrin.h>
+ #endif
++#endif
+ 
+ #ifdef __cplusplus
+ extern "C" {
