@@ -3,4 +3,6 @@ build/
 install/
 llama*/
 llama
+.zoslib_hooks/
+llamacpp-master
 *.bin
