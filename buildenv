@@ -1,7 +1,7 @@
 export ZOPEN_BUILD_LINE="DEV"
-export ZOPEN_STABLE_DEPS="zoslib make cmake curl"
+export ZOPEN_STABLE_DEPS="zoslib make cmake curl blis"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
-export ZOPEN_DEV_DEPS="zoslib make cmake curl openssl libssh2 zlib libpsl"
+export ZOPEN_DEV_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl"
 export ZOPEN_CATEGORIES="ai"
 export ZOPEN_DEV_TAG="b6027"
 export ZOPEN_NAME="llamacpp-master"
@@ -13,13 +13,14 @@ rm -f "llama"
 ln -s "llama.cpp" "llama"
 ln -s "llama.cpp" $ZOPEN_NAME
 
+# Need to 
+# export BLIS_NUM_THREADS=14
 export ZOPEN_COMP="CLANG"
 # set env variables
 # export CURL_HOME="/data/zopen/usr/local/zopen/curl/curl"
-export BLAS_HOME="/usr/lpp/cbclib"
 
 export ZOPEN_CONFIGURE="cmake"
-export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" -DCMAKE_C_FLAGS=\"-fzvector -m64 -march=z15 -lmass.arch13\" -DCMAKE_C_STANDARD=11 -DCMAKE_C_STANDARD_REQUIRED=ON -DCMAKE_C_EXTENSIONS=OFF -DCMAKE_BUILD_TYPE=Release -DLLAMA_SERVER_SSL=ON -DOPENSSL_ROOT_DIR=\$OPENSSL_HOME -DCURL_LIBRARY=\$CURL_HOME/lib/libcurl.a -DCURL_INCLUDE_DIR=\$CURL_HOME/include -DBUILD_SHARED_LIBS_DEFAULT=OFF -DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DGGML_BACKEND_DL=OFF -DGGML_OPENBLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS=/usr/lpp/cbclib/include/openblas -DBLAS_LIBRARIES=/usr/lpp/cbclib/lib/libopenblas.so -DLLAMA_BUILD_TESTS=ON -DLLAMA_CURL=ON ."
+export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" -DCMAKE_C_FLAGS=\"-fzvector -m64 -march=z15 -lmass.arch13\" -DCMAKE_C_STANDARD=11 -DCMAKE_C_STANDARD_REQUIRED=ON -DCMAKE_C_EXTENSIONS=OFF -DCMAKE_BUILD_TYPE=Release -DLLAMA_SERVER_SSL=ON -DOPENSSL_ROOT_DIR=\$OPENSSL_HOME -DCURL_LIBRARY=\$CURL_HOME/lib/libcurl.a -DCURL_INCLUDE_DIR=\$CURL_HOME/include -DBUILD_SHARED_LIBS_DEFAULT=OFF -DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DGGML_BACKEND_DL=OFF -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=FLAME -DBLAS_INCLUDE_DIRS=\$BLIS_HOME/include -DBLAS_LIBRARIES=\$BLIS_HOME/lib/libblis.a -DLLAMA_BUILD_TESTS=ON -DLLAMA_CURL=ON ."
 
 export ZOPEN_MAKE="cmake"
 export ZOPEN_MAKE_OPTS="--build ../build --parallel \$ZOPEN_NUM_JOBS --config Release"
@@ -30,11 +31,6 @@ export ZOPEN_INSTALL_OPTS="--install ../build"
 
 export ZOPEN_CHECK="ctest"
 export ZOPEN_CHECK_OPTS="--test-dir ../build  --output-on-failure"
-
-# if false; then
-#  export ZOPEN_EXTRA_CPPFLAGS="-DGGML_USE_OPENBLAS -I /home/itodoro/projects/openblas/openblas/include/openblas -mvx -mzvector -march=z15"
-#  export ZOPEN_EXTRA_LIBS="/home/itodoro/projects/openblas/openblas/libopenblas.x"
-# fi
 
 zopen_check_results()
 {
