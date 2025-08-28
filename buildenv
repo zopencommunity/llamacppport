@@ -1,4 +1,4 @@
-export ZOPEN_BUILD_LINE="DEV"
+export ZOPEN_BUILD_LINE="STABLE"
 export ZOPEN_STABLE_DEPS="zoslib make cmake curl blis"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl"
