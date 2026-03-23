@@ -1,0 +1,42 @@
+diff --git i/vendor/cpp-httplib/httplib.h w/vendor/cpp-httplib/httplib.h
+index aea6fd3..d448be6 100644
+--- i/vendor/cpp-httplib/httplib.h
++++ w/vendor/cpp-httplib/httplib.h
+@@ -11,6 +11,10 @@
+ #define CPPHTTPLIB_VERSION "0.35.0"
+ #define CPPHTTPLIB_VERSION_NUM "0x002300"
+ 
++#if defined(__MVS__)
++#include <zos-tls.h>
++#endif
++
+ /*
+  * Platform compatibility check
+  */
+@@ -291,6 +295,9 @@ using socklen_t = int;
+ #endif
+ #ifdef __MVS__
+ #include <strings.h>
++#include <zos-tls.h>
++#include <sys/time.h>
++#include <regex>
+ #ifndef NI_MAXHOST
+ #define NI_MAXHOST 1025
+ #endif
+@@ -520,6 +527,16 @@ using socket_t = int;
+ /*
+  * Declaration
+  */
++#ifdef __MVS__
++#include <strings.h>
++#include <zos-tls.h>
++#include <sys/time.h>
++#include <regex>
++#ifndef NI_MAXHOST
++#define NI_MAXHOST 1025
++#endif
++#endif
++
+ namespace httplib {
+ 
+ namespace ws {

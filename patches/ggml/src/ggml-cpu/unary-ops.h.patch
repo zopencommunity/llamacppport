@@ -1,0 +1,12 @@
+diff --git i/ggml/src/ggml-cpu/unary-ops.h w/ggml/src/ggml-cpu/unary-ops.h
+index bcad5a3..b2185f5 100644
+--- i/ggml/src/ggml-cpu/unary-ops.h
++++ w/ggml/src/ggml-cpu/unary-ops.h
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include <mass.h>
++
+ #include "common.h"
+ 
+ #ifdef __cplusplus

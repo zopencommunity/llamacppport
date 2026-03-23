@@ -1,0 +1,15 @@
+diff --git i/ggml/src/ggml-backend-reg.cpp w/ggml/src/ggml-backend-reg.cpp
+index 311fa5f..e42c1ca 100644
+--- i/ggml/src/ggml-backend-reg.cpp
++++ w/ggml/src/ggml-backend-reg.cpp
+@@ -534,7 +534,9 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
+ }
+ 
+ void ggml_backend_load_all() {
+-    ggml_backend_load_all_from_path(nullptr);
++#ifdef GGML_BACKEND_DL
++     ggml_backend_load_all_from_path(nullptr);
++#endif
+ }
+ 
+ void ggml_backend_load_all_from_path(const char * dir_path) {

@@ -1,0 +1,12 @@
+diff --git i/src/llama-hparams.h w/src/llama-hparams.h
+index c4b2a99..5565140 100644
+--- i/src/llama-hparams.h
++++ w/src/llama-hparams.h
+@@ -3,6 +3,7 @@
+ #include "llama.h"
+ 
+ #include <array>
++#include <algorithm>
+ #include <cassert>
+ 
+ // bump if necessary

@@ -1,0 +1,13 @@
+diff --git i/common/arg.cpp w/common/arg.cpp
+index 0260d79..6b25d66 100644
+--- i/common/arg.cpp
++++ w/common/arg.cpp
+@@ -42,6 +42,8 @@
+ #   endif
+ #elif defined(_AIX)
+ #include <sys/limits.h>
++#elif defined(__MVS__)
++#include <limits.h>
+ #else
+ #include <sys/syslimits.h>
+ #endif

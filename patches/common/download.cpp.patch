@@ -1,0 +1,31 @@
+diff --git i/common/download.cpp w/common/download.cpp
+index 5ef60a4..f53ac67 100644
+--- i/common/download.cpp
++++ w/common/download.cpp
+@@ -18,6 +18,9 @@
+ #include <string>
+ #include <thread>
+ #include <vector>
++#ifdef __MVS__
++#include <cstdlib>
++#endif
+ 
+ #include "http.h"
+ 
+@@ -30,6 +33,8 @@
+ #   endif
+ #elif defined(_AIX)
+ #include <sys/limits.h>
++#elif defined(__MVS__)
++#include <limits.h>
+ #else
+ #include <sys/syslimits.h>
+ #endif
+@@ -508,6 +513,7 @@ bool common_download_model(const common_params_model & model,
+         struct gguf_init_params gguf_params = {
+             /*.no_alloc = */ true,
+             /*.ctx      = */ NULL,
++            /*.allow_byteswapping = */ true,
+         };
+         auto * ctx_gguf = gguf_init_from_file(model.path.c_str(), gguf_params);
+         if (!ctx_gguf) {

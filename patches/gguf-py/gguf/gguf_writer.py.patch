@@ -1,0 +1,16 @@
+diff --git i/gguf-py/gguf/gguf_writer.py w/gguf-py/gguf/gguf_writer.py
+index 9ee3ac9..d024d3c 100644
+--- i/gguf-py/gguf/gguf_writer.py
++++ w/gguf-py/gguf/gguf_writer.py
+@@ -464,6 +464,11 @@ class GGUFWriter:
+                 for ti in tensors.values():
+                     assert ti.tensor is not None  # can only iterate once over the tensors
+                     assert ti.tensor.nbytes == ti.nbytes
++                    
++                    if (self.endianess == GGUFEndian.BIG and sys.byteorder == 'little') or (self.endianess == GGUFEndian.LITTLE and sys.byteorder == 'big'):
++                        # ti.tensor.byteswap(inplace=True) just didn't work here
++                        ti.tensor = ti.tensor.byteswap()
++
+                     ti.tensor.tofile(fout)
+                     if shard_bar is not None:
+                         shard_bar.update(ti.nbytes)

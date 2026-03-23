@@ -1,0 +1,13 @@
+diff --git i/vendor/miniaudio/miniaudio.h w/vendor/miniaudio/miniaudio.h
+index 24e676b..94164f7 100644
+--- i/vendor/miniaudio/miniaudio.h
++++ w/vendor/miniaudio/miniaudio.h
+@@ -17579,7 +17579,7 @@ static ma_result ma_thread_create__posix(ma_thread* pThread, ma_thread_priority
+     int result;
+     pthread_attr_t* pAttr = NULL;
+ 
+-#if !defined(MA_EMSCRIPTEN) && !defined(MA_3DS) && !defined(MA_SWITCH)
++#if !defined(MA_EMSCRIPTEN) && !defined(MA_3DS) && !defined(MA_SWITCH) && !defined(__MVS__)
+     /* Try setting the thread priority. It's not critical if anything fails here. */
+     pthread_attr_t attr;
+     if (pthread_attr_init(&attr) == 0) {
