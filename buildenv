@@ -4,10 +4,10 @@ LLAMACPP_VERSION="8492"
 export ZOPEN_BUILD_LINE="STABLE"
 export ZOPEN_STABLE_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl"
 export ZOPEN_STABLE_URL="https://github.com/ggerganov/llama.cpp.git"
+export ZOPEN_STABLE_TAG="b${LLAMACPP_VERSION}"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl"
 export ZOPEN_CATEGORIES="ai"
-export ZOPEN_STABLE_TAG="b${LLAMACPP_VERSION}"
 export ZOPEN_NAME="llamacpp"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
@@ -102,5 +102,5 @@ zopen_get_version()
 {
   # Modify to echo the version of your tool/library
   # Rather than hardcoding the version, obtain the version by running the tool/library
-  echo "b$LLAMACPP_VERSION"
+  echo "$LLAMACPP_VERSION"
 }
