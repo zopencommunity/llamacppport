@@ -4,7 +4,7 @@ export ZOPEN_STABLE_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl"
 export ZOPEN_CATEGORIES="ai"
-export ZOPEN_DEV_TAG="b8208"
+export ZOPEN_STABLE_TAG="b8492"
 export ZOPEN_NAME="llamacpp-master"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
@@ -15,7 +15,7 @@ ln -s "llama.cpp" "llama"
 ln -s "llama.cpp" $ZOPEN_NAME
 
 export ZOPEN_COMP="CLANG"
-export ZOPEN_EXTRA_CPPFLAGS="-D_XOPEN_SOURCE=600 -D_POSIX_C_SOURCE=200809L -D__XPLAT=1 -Dthread_local="
+export ZOPEN_EXTRA_CPPFLAGS="-D_XOPEN_SOURCE=600 -D_POSIX_C_SOURCE=200809L -D__XPLAT=1 -Dthread_local= -D__MVS__=1"
 export ZOPEN_EXTRA_CFLAGS="-mzos-target=zosv3r1"
 export ZOPEN_EXTRA_CXXFLAGS="-mzos-target=zosv3r1"
 

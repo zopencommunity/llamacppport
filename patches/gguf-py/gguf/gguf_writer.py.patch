@@ -1,8 +1,8 @@
 diff --git i/gguf-py/gguf/gguf_writer.py w/gguf-py/gguf/gguf_writer.py
-index 9ee3ac9..d024d3c 100644
+index 010dfee..bdc1685 100644
 --- i/gguf-py/gguf/gguf_writer.py
 +++ w/gguf-py/gguf/gguf_writer.py
-@@ -464,6 +464,11 @@ class GGUFWriter:
+@@ -466,6 +466,11 @@ class GGUFWriter:
                  for ti in tensors.values():
                      assert ti.tensor is not None  # can only iterate once over the tensors
                      assert ti.tensor.nbytes == ti.nbytes

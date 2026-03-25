@@ -1,10 +1,10 @@
 diff --git i/common/http.h w/common/http.h
-index e8ed56f..8556e10 100644
+index d3daccd..9c181c7 100644
 --- i/common/http.h
 +++ w/common/http.h
-@@ -70,6 +70,12 @@ static std::pair<httplib::Client, common_http_url> common_http_client(const std:
+@@ -85,6 +85,12 @@ static std::pair<httplib::Client, common_http_url> common_http_client(const std:
  
-     httplib::Client cli(parts.scheme + "://" + parts.host);
+     httplib::Client cli(parts.scheme + "://" + parts.host + ":" + std::to_string(parts.port));
  
 +#ifdef __MVS__
 +    if (std::getenv("SSL_CERT_PATH")) {

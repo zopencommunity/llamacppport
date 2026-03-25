@@ -1,5 +1,5 @@
 diff --git i/src/llama-adapter.cpp w/src/llama-adapter.cpp
-index d6a5800..1422ab4 100644
+index 2f2cc12..627ef93 100644
 --- i/src/llama-adapter.cpp
 +++ w/src/llama-adapter.cpp
 @@ -153,6 +153,7 @@ static void llama_adapter_lora_init_impl(llama_model & model, const char * path_

@@ -1,8 +1,8 @@
 diff --git i/src/llama-context.cpp w/src/llama-context.cpp
-index eee9021..b95a2f4 100644
+index 6aa7363..58b4eb4 100644
 --- i/src/llama-context.cpp
 +++ w/src/llama-context.cpp
-@@ -1750,12 +1750,17 @@ int llama_context::decode(const llama_batch & batch_inp) {
+@@ -1863,12 +1863,17 @@ int llama_context::decode(const llama_batch & batch_inp) {
                  // remember the swaps and apply them lazily upon logits/embeddings access
                  output_swaps.push_back({ i, j_min });
              }
@@ -22,7 +22,7 @@ index eee9021..b95a2f4 100644
          }
      }
  
-@@ -1890,7 +1895,9 @@ uint32_t llama_context::output_reserve(int32_t n_outputs) {
+@@ -2004,7 +2009,9 @@ uint32_t llama_context::output_reserve(int32_t n_outputs) {
      }
  
      // set all ids as invalid (negative)

@@ -1,16 +1,8 @@
 diff --git i/vendor/cpp-httplib/httplib.cpp w/vendor/cpp-httplib/httplib.cpp
-index 7f76978..c90023e 100644
+index fa07182..8803a41 100644
 --- i/vendor/cpp-httplib/httplib.cpp
 +++ w/vendor/cpp-httplib/httplib.cpp
-@@ -1,4 +1,7 @@
- #include "httplib.h"
-+#ifdef __MVS__
-+#include <array>
-+#endif
- namespace httplib {
- // httplib::any â type-erased value container (C++11 compatible)
- // On C++17+ builds, thin wrappers around std::any are provided.
-@@ -879,7 +882,12 @@ bool write_websocket_frame(Stream &strm, ws::Opcode opcode,
+@@ -875,7 +875,12 @@ bool write_websocket_frame(Stream &strm, ws::Opcode opcode,
  
    if (mask) {
      // Generate random mask key
@@ -23,7 +15,7 @@ index 7f76978..c90023e 100644
      uint8_t mask_key[4];
      auto r = rng();
      std::memcpy(mask_key, &r, 4);
-@@ -1087,7 +1095,12 @@ std::string encode_path(const std::string &s) {
+@@ -1107,7 +1112,12 @@ std::string encode_path(const std::string &s) {
  
  std::string file_extension(const std::string &path) {
    std::smatch m;
@@ -36,7 +28,7 @@ index 7f76978..c90023e 100644
    if (std::regex_search(path, m, re)) { return m[1].str(); }
    return std::string();
  }
-@@ -1160,6 +1173,36 @@ bool parse_trailers(stream_line_reader &line_reader, Headers &dest,
+@@ -1180,6 +1190,36 @@ bool parse_trailers(stream_line_reader &line_reader, Headers &dest,
    // chunked transfer coding data without the final CRLF.
  
    // RFC 7230 Section 4.1.2 - Headers prohibited in trailers
@@ -73,7 +65,7 @@ index 7f76978..c90023e 100644
    thread_local case_ignore::unordered_set<std::string> prohibited_trailers = {
        "transfer-encoding",
        "content-length",
-@@ -1187,6 +1230,7 @@ bool parse_trailers(stream_line_reader &line_reader, Headers &dest,
+@@ -1207,6 +1247,7 @@ bool parse_trailers(stream_line_reader &line_reader, Headers &dest,
        "content-type",
        "content-range",
        "trailer"};
@@ -81,39 +73,7 @@ index 7f76978..c90023e 100644
  
    case_ignore::unordered_set<std::string> declared_trailers;
    auto trailer_header = get_header_value(src_headers, "Trailer", "", 0);
-@@ -3934,9 +3978,16 @@ public:
-             file_.content_type =
-                 trim_copy(header.substr(str_len(header_content_type)));
-           } else {
-+#ifdef __MVS__
-+            static __tlssim<std::regex> re_content_disposition_storage(std::regex(
-+                R"~(^Content-Disposition:\s*form-data;\s*(.*)$)~",
-+                std::regex_constants::icase));
-+            std::regex& re_content_disposition = *re_content_disposition_storage.access();
-+#else
-             thread_local const std::regex re_content_disposition(
-                 R"~(^Content-Disposition:\s*form-data;\s*(.*)$)~",
-                 std::regex_constants::icase);
-+#endif
- 
-             std::smatch m;
-             if (std::regex_match(header, m, re_content_disposition)) {
-@@ -3957,8 +4008,14 @@ public:
-               it = params.find("filename*");
-               if (it != params.end()) {
-                 // Only allow UTF-8 encoding...
-+#ifdef __MVS__
-+                static __tlssim<std::regex> re_rfc5987_encoding_storage(std::regex(
-+                    R"~(^UTF-8''(.+?)$)~", std::regex_constants::icase));
-+                std::regex& re_rfc5987_encoding = *re_rfc5987_encoding_storage.access();
-+#else
-                 thread_local const std::regex re_rfc5987_encoding(
-                     R"~(^UTF-8''(.+?)$)~", std::regex_constants::icase);
-+#endif
- 
-                 std::smatch m2;
-                 if (std::regex_match(it->second, m2, re_rfc5987_encoding)) {
-@@ -4123,6 +4180,18 @@ std::string random_string(size_t length) {
+@@ -4242,6 +4283,18 @@ std::string random_string(size_t length) {
    constexpr const char data[] =
        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
  
@@ -132,7 +92,7 @@ index 7f76978..c90023e 100644
    thread_local auto engine([]() {
      // std::random_device might actually be deterministic on some
      // platforms, but due to lack of support in the c++ standard library,
-@@ -4132,6 +4201,7 @@ std::string random_string(size_t length) {
+@@ -4251,6 +4304,7 @@ std::string random_string(size_t length) {
      std::seed_seq seed_sequence{seed_gen(), seed_gen(), seed_gen(), seed_gen()};
      return std::mt19937(seed_sequence);
    }());
@@ -140,7 +100,7 @@ index 7f76978..c90023e 100644
  
    std::string result;
    for (size_t i = 0; i < length; i++) {
-@@ -4539,8 +4609,13 @@ bool parse_www_authenticate(const Response &res,
+@@ -4659,8 +4713,13 @@ bool parse_www_authenticate(const Response &res,
                                     bool is_proxy) {
    auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
    if (res.has_header(auth_key)) {
@@ -154,7 +114,7 @@ index 7f76978..c90023e 100644
      auto s = res.get_header_value(auth_key);
      auto pos = s.find(' ');
      if (pos != std::string::npos) {
-@@ -5552,7 +5627,12 @@ std::string decode_query_component(const std::string &component,
+@@ -5698,7 +5757,12 @@ std::string sanitize_filename(const std::string &filename) {
  std::string append_query_params(const std::string &path,
                                         const Params &params) {
    std::string path_with_query = path;
@@ -167,7 +127,7 @@ index 7f76978..c90023e 100644
    auto delm = std::regex_match(path, re) ? '&' : '?';
    path_with_query += delm + detail::params_to_query_str(params);
    return path_with_query;
-@@ -6897,9 +6977,15 @@ bool Server::parse_request_line(const char *s, Request &req) const {
+@@ -7068,9 +7132,15 @@ bool Server::parse_request_line(const char *s, Request &req) const {
      if (count != 3) { return false; }
    }
  
@@ -183,7 +143,7 @@ index 7f76978..c90023e 100644
  
    if (methods.find(req.method) == methods.end()) {
      output_error_log(Error::InvalidHTTPMethod, &req);
-@@ -8258,9 +8344,19 @@ bool ClientImpl::read_response_line(Stream &strm, const Request &req,
+@@ -8452,9 +8522,19 @@ bool ClientImpl::read_response_line(Stream &strm, const Request &req,
    if (!line_reader.getline()) { return false; }
  
  #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
@@ -203,7 +163,7 @@ index 7f76978..c90023e 100644
  #endif
  
    std::cmatch m;
-@@ -11950,13 +12046,23 @@ PeerCert get_peer_cert_from_session(const_session_t session) {
+@@ -12140,13 +12220,23 @@ PeerCert get_peer_cert_from_session(const_session_t session) {
  namespace impl {
  
  VerifyCallback &get_verify_callback() {
@@ -227,7 +187,7 @@ index 7f76978..c90023e 100644
  }
  
  // Check if a string is an IPv4 address
-@@ -13519,8 +13625,13 @@ struct MbedTlsSession {
+@@ -13719,8 +13809,13 @@ struct MbedTlsSession {
  // Thread-local error code accessor for Mbed TLS (since it doesn't have an error
  // queue)
  int &mbedtls_last_error() {
@@ -241,7 +201,7 @@ index 7f76978..c90023e 100644
  }
  
  // Helper to map Mbed TLS error to ErrorCode
-@@ -13613,8 +13724,13 @@ MbedTlsContext::~MbedTlsContext() {
+@@ -13813,8 +13908,13 @@ MbedTlsContext::~MbedTlsContext() {
  // This is needed because the SNI callback doesn't have a way to pass
  // session-specific data before the session is fully set up
  std::string &mbedpending_sni() {
@@ -255,7 +215,7 @@ index 7f76978..c90023e 100644
  }
  
  // SNI callback for Mbed TLS server to capture client's SNI hostname
-@@ -13654,8 +13770,15 @@ int mbedtls_verify_callback(void *data, mbedtls_x509_crt *crt,
+@@ -13854,8 +13954,15 @@ int mbedtls_verify_callback(void *data, mbedtls_x509_crt *crt,
    verify_ctx.error_code = static_cast<long>(*flags);
  
    // Convert Mbed TLS flags to error string
@@ -271,7 +231,7 @@ index 7f76978..c90023e 100644
      mbedtls_x509_crt_verify_info(error_buf, sizeof(error_buf), "", *flags);
      verify_ctx.error_string = error_buf;
    } else {
-@@ -14770,8 +14893,13 @@ struct WolfSSLSession {
+@@ -14970,8 +15077,13 @@ struct WolfSSLSession {
  
  // Thread-local error code accessor for wolfSSL
  uint64_t &wolfssl_last_error() {

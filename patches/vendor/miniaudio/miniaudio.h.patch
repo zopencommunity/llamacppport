@@ -1,5 +1,5 @@
 diff --git i/vendor/miniaudio/miniaudio.h w/vendor/miniaudio/miniaudio.h
-index 24e676b..94164f7 100644
+index c6d493e..910a0c6 100644
 --- i/vendor/miniaudio/miniaudio.h
 +++ w/vendor/miniaudio/miniaudio.h
 @@ -17579,7 +17579,7 @@ static ma_result ma_thread_create__posix(ma_thread* pThread, ma_thread_priority

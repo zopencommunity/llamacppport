@@ -1,5 +1,5 @@
 diff --git i/ggml/src/ggml-impl.h w/ggml/src/ggml-impl.h
-index e3714b3..06078c7 100644
+index 9256865..8b68014 100644
 --- i/ggml/src/ggml-impl.h
 +++ w/ggml/src/ggml-impl.h
 @@ -21,9 +21,21 @@
@@ -25,7 +25,7 @@ index e3714b3..06078c7 100644
  #ifdef __cplusplus
  extern "C" {
  #endif
-@@ -565,6 +577,18 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
+@@ -620,6 +632,18 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
  #define GGML_FP32_TO_BF16(x) ggml_compute_fp32_to_bf16(x)
  #define GGML_BF16_TO_FP32(x) ggml_compute_bf16_to_fp32(x)
  
@@ -44,7 +44,7 @@ index e3714b3..06078c7 100644
  static inline int32_t ggml_node_get_use_count(const struct ggml_cgraph * cgraph, int node_idx) {
      const struct ggml_tensor * node = cgraph->nodes[node_idx];
  
-@@ -688,6 +712,31 @@ static inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph * cgraph,
+@@ -743,6 +767,31 @@ static inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph * cgraph,
  #include <array>
  #include <initializer_list>
  #include <vector>

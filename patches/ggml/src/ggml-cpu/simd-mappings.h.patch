@@ -1,8 +1,8 @@
 diff --git i/ggml/src/ggml-cpu/simd-mappings.h w/ggml/src/ggml-cpu/simd-mappings.h
-index 22de557..81c36fa 100644
+index 0deda93..37b72ca 100644
 --- i/ggml/src/ggml-cpu/simd-mappings.h
 +++ w/ggml/src/ggml-cpu/simd-mappings.h
-@@ -1126,7 +1126,7 @@ static inline void __lsx_f16x4_store(ggml_fp16_t * x, __m128 y) {
+@@ -1166,7 +1166,7 @@ static inline void __lsx_f16x4_store(ggml_fp16_t * x, __m128 y) {
  #define GGML_F16_VEC_MUL             GGML_F32Cx4_MUL
  #define GGML_F16_VEC_REDUCE          GGML_F32Cx4_REDUCE
  
