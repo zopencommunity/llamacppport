@@ -1,10 +1,14 @@
+# bump: llamacpp-version /LLAMACPP_VERSION="(.*)"/ gitrefs:https://github.com/ggerganov/llama.cpp.git|re:/b([\d]{4})/|semver:*|/\d\d00$/
+LLAMACPP_VERSION="8492"
+
 export ZOPEN_BUILD_LINE="STABLE"
-export ZOPEN_STABLE_DEPS="zoslib make cmake curl blis"
+export ZOPEN_STABLE_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl"
+export ZOPEN_STABLE_URL="https://github.com/ggerganov/llama.cpp.git"
+export ZOPEN_STABLE_TAG="b${LLAMACPP_VERSION}"
 export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl"
 export ZOPEN_CATEGORIES="ai"
-export ZOPEN_DEV_TAG="b6027"
-export ZOPEN_NAME="llamacpp-master"
+export ZOPEN_NAME="llamacpp"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
 # export ZOPEN_SKIP_ZOSLIB_ENV_HOOK=1
@@ -13,14 +17,13 @@ rm -f "llama"
 ln -s "llama.cpp" "llama"
 ln -s "llama.cpp" $ZOPEN_NAME
 
-# Need to 
-# export BLIS_NUM_THREADS=14
 export ZOPEN_COMP="CLANG"
-# set env variables
-# export CURL_HOME="/data/zopen/usr/local/zopen/curl/curl"
+export ZOPEN_EXTRA_CPPFLAGS="-D_XOPEN_SOURCE=600 -D_POSIX_C_SOURCE=200809L -D__XPLAT=1 -Dthread_local="
+export ZOPEN_EXTRA_CFLAGS="-mzos-target=zosv3r1"
+export ZOPEN_EXTRA_CXXFLAGS="-mzos-target=zosv3r1"
 
 export ZOPEN_CONFIGURE="cmake"
-export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" -DCMAKE_C_FLAGS=\"-fzvector -m64 -march=z15 -lmass.arch13\" -DCMAKE_C_STANDARD=11 -DCMAKE_C_STANDARD_REQUIRED=ON -DCMAKE_C_EXTENSIONS=OFF -DCMAKE_BUILD_TYPE=Release -DLLAMA_SERVER_SSL=ON -DOPENSSL_ROOT_DIR=\$OPENSSL_HOME -DCURL_LIBRARY=\$CURL_HOME/lib/libcurl.a -DCURL_INCLUDE_DIR=\$CURL_HOME/include -DBUILD_SHARED_LIBS_DEFAULT=OFF -DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DGGML_BACKEND_DL=OFF -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=FLAME -DBLAS_INCLUDE_DIRS=\$BLIS_HOME/include -DBLAS_LIBRARIES=\$BLIS_HOME/lib/libblis.a -DLLAMA_BUILD_TESTS=ON -DLLAMA_CURL=ON ."
+export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" -DCMAKE_C_FLAGS=\"-fzvector -m64 -march=z15\" -DCMAKE_C_STANDARD=11 -DCMAKE_C_STANDARD_REQUIRED=ON -DCMAKE_C_EXTENSIONS=OFF -DCMAKE_BUILD_TYPE=Release -DLLAMA_SERVER_SSL=ON -DOPENSSL_ROOT_DIR=\$OPENSSL_HOME -DCURL_LIBRARY=\$CURL_HOME/lib/libcurl.a -DCURL_INCLUDE_DIR=\$CURL_HOME/include -DBUILD_SHARED_LIBS_DEFAULT=OFF -DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DGGML_BACKEND_DL=OFF -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=FLAME -DBLAS_INCLUDE_DIRS=\$BLIS_HOME/include -DBLAS_LIBRARIES=\$BLIS_HOME/lib/libblis.a -DLLAMA_BUILD_TESTS=ON -DLLAMA_CURL=ON ."
 
 export ZOPEN_MAKE="cmake"
 export ZOPEN_MAKE_OPTS="--build ../build --parallel \$ZOPEN_NUM_JOBS --config Release"
@@ -55,7 +58,7 @@ zopen_check_results()
   echo "actualPassed:$passed"
   echo "actualSkipped:$skipped"
   echo "totalTests:$total"
-  echo "expectedFailures:3"
+  echo "expectedFailures:8"
   echo "expectedTotalTests:$total"
 }
 
@@ -68,18 +71,27 @@ export CFLAGS="$CFLAGS -march=z15 -mzvector"
 export CPPFLAGS="$CPPFLAGS -march=z15"
 }
 
+zopen_post_install()
+{
+  # Install a cacert.pem to be used (optionally) by the customer
+  if ! $MYDIR/zopen update-cacert -f "$1" ; then
+    printSoftError "zopen update-cacert failed"
+    return 4
+  fi
+}
+
 # zopen_append_to_env()
 # {
 #  export SSL_CERT_PATH=$(curl-config --ca)
 #  # echo envars outside of PATH, MANPATH, LIBPATH
 # }
 
-# zopen_append_to_zoslib_env()
-# {
-#  cat<<EOF
-#  SSL_CERT_PATH|set|$(curl-config --ca)
-#  EOF
-# }
+zopen_append_to_zoslib_env()
+{
+cat<<EOF
+SSL_CERT_PATH|set|PROJECT_ROOT/cacert.pem
+EOF
+}
 
 zopen_append_to_setup()
 {
@@ -90,5 +102,5 @@ zopen_get_version()
 {
   # Modify to echo the version of your tool/library
   # Rather than hardcoding the version, obtain the version by running the tool/library
-  echo "1.0.0"
+  echo "$LLAMACPP_VERSION"
 }

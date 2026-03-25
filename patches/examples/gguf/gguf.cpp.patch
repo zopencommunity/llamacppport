@@ -1,0 +1,12 @@
+diff --git i/examples/gguf/gguf.cpp w/examples/gguf/gguf.cpp
+index 79ad387..985264f 100644
+--- i/examples/gguf/gguf.cpp
++++ w/examples/gguf/gguf.cpp
+@@ -88,6 +88,7 @@ static bool gguf_ex_read_0(const std::string & fname) {
+     struct gguf_init_params params = {
+         /*.no_alloc = */ false,
+         /*.ctx      = */ NULL,
++	/*.allow_byteswapping = */ true,
+     };
+ 
+     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
