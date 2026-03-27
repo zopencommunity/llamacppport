@@ -175,7 +175,7 @@ index 0587109..06d50e2 100644
  
  void ggml_backend_load_all_from_path(const char * dir_path) {
 diff --git a/ggml/src/ggml-cpu/CMakeLists.txt b/ggml/src/ggml-cpu/CMakeLists.txt
-index 1a1bbc9..5969069 100644
+index 1a1bbc9..f29de5e 100644
 --- a/ggml/src/ggml-cpu/CMakeLists.txt
 +++ b/ggml/src/ggml-cpu/CMakeLists.txt
 @@ -56,7 +56,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
@@ -196,7 +196,7 @@ index 1a1bbc9..5969069 100644
  
      if (GGML_SYSTEM_ARCH STREQUAL "ARM")
          message(STATUS "ARM detected")
-@@ -550,8 +550,25 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+@@ -550,8 +550,27 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
          message(STATUS "Wasm detected")
          list (APPEND GGML_CPU_SOURCES ggml-cpu/arch/wasm/quants.c)
      else()
@@ -213,12 +213,14 @@ index 1a1bbc9..5969069 100644
 +	endif()
 +	target_include_directories(${GGML_CPU_NAME} PRIVATE /usr/include)
 +	target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
-+	if(NOT DEFINED GGML_NO_MASS)
++	# MASSV vectorized math â disabled by default (vsexp has issues in interactive mode)
++	# To enable: cmake -DGGML_USE_MASSV=ON
++	if(GGML_USE_MASSV)
 +	    target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
 +	    target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_MASS)
 +	    message(STATUS "MASSV enabled: /usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
 +	else()
-+	    message(STATUS "MASSV disabled by GGML_NO_MASS")
++	    message(STATUS "MASSV disabled (use -DGGML_USE_MASSV=ON to enable)")
 +	endif()
 +	message(STATUS "Found MASS: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
      endif()
