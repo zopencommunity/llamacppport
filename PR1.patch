@@ -628,7 +628,7 @@ index d0e4001..96165dd 100644
  
  ggml_float ggml_vec_log_soft_max_f32(const int n, float * y, const float * x, float max) {
 diff --git a/ggml/src/ggml-cpu/vec.h b/ggml/src/ggml-cpu/vec.h
-index 3198b33..90240e9 100644
+index 3198b33..d6e980a 100644
 --- a/ggml/src/ggml-cpu/vec.h
 +++ b/ggml/src/ggml-cpu/vec.h
 @@ -7,6 +7,10 @@
@@ -880,7 +880,7 @@ index 3198b33..90240e9 100644
  inline static void ggml_vec_abs_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
      for (int i = 0; i < n; ++i) {
          y[i] = GGML_CPU_FP32_TO_FP16(fabsf(GGML_CPU_FP16_TO_FP32(x[i])));
-@@ -1382,7 +1539,89 @@ inline static vfloat32m2_t ggml_v_silu_m2(vfloat32m2_t x, int vl) {
+@@ -1382,7 +1539,92 @@ inline static vfloat32m2_t ggml_v_silu_m2(vfloat32m2_t x, int vl) {
      return __riscv_vfdiv_vv_f32m2(x, one_plus_exp_neg_x, vl);
  }
  
@@ -919,7 +919,8 @@ index 3198b33..90240e9 100644
 +    const float32x4_t b = vec_sub(vec_sub(x, vec_mul(n, vec_splats(0x1.62e4p-1f))),
 +                                  vec_mul(n, vec_splats(0x1.7f7d1cp-20f)));
 +
-+    const uint32x4_t e = vec_sl(vxe_reinterpret_u32_f32(z), (uint32x4_t){23,23,23,23});
++    const uint32x4_t v_23 = vec_splats((uint32_t)23);
++    const uint32x4_t e = vec_sl(vxe_reinterpret_u32_f32(z), v_23);
 +    const float32x4_t k = vxe_reinterpret_f32_u32(vec_add(e, vxe_reinterpret_u32_f32(vec_splats(1.0f))));
 +
 +    const float32x4_t abs_n = vec_abs(n);
@@ -941,8 +942,10 @@ index 3198b33..90240e9 100644
 +
 +    // Slow path for overflow/underflow
 +    const uint32x4_t neg_mask = (uint32x4_t)vec_cmple(n, vec_splats(0.0f));
-+    const uint32x4_t d = vec_and(neg_mask, (uint32x4_t){0x82000000u, 0x82000000u, 0x82000000u, 0x82000000u});
-+    const float32x4_t s1 = vxe_reinterpret_f32_u32(vec_add(d, (uint32x4_t){0x7f000000u, 0x7f000000u, 0x7f000000u, 0x7f000000u}));
++    const uint32x4_t v_82 = vec_splats((uint32_t)0x82000000u);
++    const uint32x4_t v_7f = vec_splats((uint32_t)0x7f000000u);
++    const uint32x4_t d = vec_and(neg_mask, v_82);
++    const float32x4_t s1 = vxe_reinterpret_f32_u32(vec_add(d, v_7f));
 +    const float32x4_t s2 = vxe_reinterpret_f32_u32(vec_sub(e, d));
 +
 +    const uint32x4_t d2 = (uint32x4_t)vec_cmpgt(abs_n, vec_splats(192.0f));
