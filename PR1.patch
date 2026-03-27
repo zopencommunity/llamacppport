@@ -12,7 +12,7 @@ index c6a2dcb..6558b31 100644
  #include <sys/syslimits.h>
  #endif
 diff --git a/common/common.cpp b/common/common.cpp
-index 59d75a3..448a3b4 100644
+index 59d75a3..02e8586 100644
 --- a/common/common.cpp
 +++ b/common/common.cpp
 @@ -852,7 +852,7 @@ std::string fs_get_cache_directory() {
@@ -28,7 +28,7 @@ index 59d75a3..448a3b4 100644
      struct gguf_init_params meta_gguf_params = {
          /* .no_alloc = */ false,
          /* .ctx      = */ &ctx,
-+	/* .allow_byteswapping = */ true,
++        /* .allow_byteswapping = */ true,
      };
      struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
      if (!ctx_gguf) {
@@ -64,7 +64,7 @@ index 5ef60a4..f53ac67 100644
          auto * ctx_gguf = gguf_init_from_file(model.path.c_str(), gguf_params);
          if (!ctx_gguf) {
 diff --git a/common/http.h b/common/http.h
-index d3daccd..9c181c7 100644
+index d3daccd..05cf703 100644
 --- a/common/http.h
 +++ b/common/http.h
 @@ -85,6 +85,12 @@ static std::pair<httplib::Client, common_http_url> common_http_client(const std:
@@ -72,8 +72,8 @@ index d3daccd..9c181c7 100644
      httplib::Client cli(parts.scheme + "://" + parts.host + ":" + std::to_string(parts.port));
  
 +#ifdef __MVS__
-+    if (std::getenv("SSL_CERT_PATH")) {
-+        cli.set_ca_cert_path(std::getenv("SSL_CERT_PATH"));
++    if (const char * cert = std::getenv("SSL_CERT_PATH")) {
++        cli.set_ca_cert_path(cert);
 +    }
 +#endif
 +
@@ -81,43 +81,43 @@ index d3daccd..9c181c7 100644
          cli.set_basic_auth(parts.user, parts.password);
      }
 diff --git a/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp b/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
-index 702bc74..ae4cb5e 100644
+index 702bc74..08a33f0 100644
 --- a/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
 +++ b/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
 @@ -537,6 +537,7 @@ static void load_vocab(const char * filename, const Config * config, struct my_l
          struct gguf_init_params params = {
              /*.no_alloc = */ false,
              /*.ctx      = */ &ctx_data,
-+	    /*.allow_byteswapping = */ true,
++            /*.allow_byteswapping = */ true,
          };
  
          struct gguf_context * ctx = gguf_init_from_file(filename, params);
 diff --git a/examples/gguf-hash/gguf-hash.cpp b/examples/gguf-hash/gguf-hash.cpp
-index 331de30..d754f4b 100644
+index 331de30..999b918 100644
 --- a/examples/gguf-hash/gguf-hash.cpp
 +++ b/examples/gguf-hash/gguf-hash.cpp
 @@ -291,6 +291,7 @@ static hash_exit_code_t gguf_hash(const hash_params & hash_params) {
      struct gguf_init_params params = {
          /*.no_alloc = */ false,
          /*.ctx      = */ &ctx_data,
-+	/*.allow_byteswapping = */ true,
++        /*.allow_byteswapping = */ true,
      };
  
      // xxh64 init
 diff --git a/examples/gguf/gguf.cpp b/examples/gguf/gguf.cpp
-index 79ad387..985264f 100644
+index 79ad387..fa57340 100644
 --- a/examples/gguf/gguf.cpp
 +++ b/examples/gguf/gguf.cpp
 @@ -88,6 +88,7 @@ static bool gguf_ex_read_0(const std::string & fname) {
      struct gguf_init_params params = {
          /*.no_alloc = */ false,
          /*.ctx      = */ NULL,
-+	/*.allow_byteswapping = */ true,
++        /*.allow_byteswapping = */ true,
      };
  
      struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
 diff --git a/ggml/include/ggml.h b/ggml/include/ggml.h
-index 669f66b..84f2175 100644
+index 669f66b..21594bb 100644
 --- a/ggml/include/ggml.h
 +++ b/ggml/include/ggml.h
 @@ -2721,6 +2721,7 @@ extern "C" {
@@ -132,12 +132,12 @@ index 669f66b..84f2175 100644
          bool                     is_quantized;
          ggml_to_float_t          to_float;
          ggml_from_float_t        from_float_ref;
-+	ggml_byteswap_t 	 byteswap;
++    ggml_byteswap_t      byteswap;
      };
  
      GGML_API const struct ggml_type_traits * ggml_get_type_traits(enum ggml_type type);
 diff --git a/ggml/include/gguf.h b/ggml/include/gguf.h
-index 79ee202..236205c 100644
+index 79ee202..d773690 100644
 --- a/ggml/include/gguf.h
 +++ b/ggml/include/gguf.h
 @@ -74,6 +74,8 @@ extern "C" {
@@ -145,7 +145,7 @@ index 79ee202..236205c 100644
          // if not NULL, create a ggml_context and allocate the tensor data in it
          struct ggml_context ** ctx;
 +
-+	bool allow_byteswapping;
++        bool allow_byteswapping;
      };
  
      GGML_API struct gguf_context * gguf_init_empty(void);
@@ -160,72 +160,53 @@ index 79ee202..236205c 100644
  }
  #endif
 diff --git a/ggml/src/ggml-backend-reg.cpp b/ggml/src/ggml-backend-reg.cpp
-index 0587109..06d50e2 100644
+index 0587109..8bfcdf6 100644
 --- a/ggml/src/ggml-backend-reg.cpp
 +++ b/ggml/src/ggml-backend-reg.cpp
 @@ -541,7 +541,9 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
  }
  
  void ggml_backend_load_all() {
--    ggml_backend_load_all_from_path(nullptr);
 +#ifdef GGML_BACKEND_DL
-+     ggml_backend_load_all_from_path(nullptr);
+     ggml_backend_load_all_from_path(nullptr);
 +#endif
  }
  
  void ggml_backend_load_all_from_path(const char * dir_path) {
 diff --git a/ggml/src/ggml-cpu/CMakeLists.txt b/ggml/src/ggml-cpu/CMakeLists.txt
-index 1a1bbc9..f29de5e 100644
+index 1a1bbc9..7f57a3a 100644
 --- a/ggml/src/ggml-cpu/CMakeLists.txt
 +++ b/ggml/src/ggml-cpu/CMakeLists.txt
-@@ -56,7 +56,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
- 
-     target_compile_features(${GGML_CPU_NAME} PRIVATE c_std_11 cxx_std_17)
-     target_include_directories(${GGML_CPU_NAME} PRIVATE . ggml-cpu)
--
-+    list(APPEND ARCH_FLAGS -fzvector -m64 -march=z15)
-     if (APPLE AND GGML_ACCELERATE)
-         find_library(ACCELERATE_FRAMEWORK Accelerate)
-         if (ACCELERATE_FRAMEWORK)
-@@ -101,7 +101,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
-         target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_CPU_HBM)
- 
-         target_link_libraries(${GGML_CPU_NAME} PUBLIC memkind)
--    endif()
-+   endif()
- 
-     if (GGML_SYSTEM_ARCH STREQUAL "ARM")
-         message(STATUS "ARM detected")
-@@ -550,8 +550,27 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+@@ -549,6 +549,29 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+     elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "wasm")
          message(STATUS "Wasm detected")
          list (APPEND GGML_CPU_SOURCES ggml-cpu/arch/wasm/quants.c)
++    elseif (CMAKE_SYSTEM_NAME STREQUAL "OS390")
++        message(STATUS "z/OS detected")
++        list(APPEND ARCH_FLAGS -fzvector -m64 -march=z15)
++        list(APPEND GGML_CPU_SOURCES ggml-cpu/arch/s390/quants.c)
++        list(APPEND ARCH_DEFINITIONS GGML_VXE)
++        if(NOT DEFINED TARGET_ARCH)
++            set(TARGET_ARCH 13)
++        endif()
++        if(TARGET_ARCH GREATER 13)
++            target_compile_options(${GGML_CPU_NAME} PRIVATE "-qarch=${TARGET_ARCH}")
++        endif()
++        target_include_directories(${GGML_CPU_NAME} PRIVATE /usr/include)
++        target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
++        # MASSV vectorized math â disabled by default (vsexp has issues in interactive mode)
++        # To enable: cmake -DGGML_USE_MASSV=ON
++        if(GGML_USE_MASSV)
++            target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
++            target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_MASS)
++            message(STATUS "MASSV enabled: /usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
++        else()
++            message(STATUS "MASSV disabled (use -DGGML_USE_MASSV=ON to enable)")
++        endif()
++        message(STATUS "Found MASS: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
      else()
--        message(WARNING "Unknown CPU architecture. Falling back to generic implementations.")
--        list(APPEND ARCH_FLAGS -DGGML_CPU_GENERIC)
-+        message(WARNING "Unknown CPU architecture. Falling back to s390x/z/OS implementations.")
-+	list(APPEND GGML_CPU_SOURCES ggml-cpu/arch/s390/quants.c)
-+	list(APPEND ARCH_DEFINITIONS GGML_VXE)
-+	if(NOT DEFINED TARGET_ARCH)
-+  	  set(TARGET_ARCH 13)
-+	endif()
-+	if(TARGET_ARCH GREATER 13)
-+  	  target_compile_options(${GGML_CPU_NAME} PRIVATE "-qarch=${TARGET_ARCH}")
-+	endif()
-+	target_include_directories(${GGML_CPU_NAME} PRIVATE /usr/include)
-+	target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
-+	# MASSV vectorized math â disabled by default (vsexp has issues in interactive mode)
-+	# To enable: cmake -DGGML_USE_MASSV=ON
-+	if(GGML_USE_MASSV)
-+	    target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
-+	    target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_MASS)
-+	    message(STATUS "MASSV enabled: /usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
-+	else()
-+	    message(STATUS "MASSV disabled (use -DGGML_USE_MASSV=ON to enable)")
-+	endif()
-+	message(STATUS "Found MASS: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
-     endif()
- 
-     if (GGML_CPU_REPACK)
+         message(WARNING "Unknown CPU architecture. Falling back to generic implementations.")
+         list(APPEND ARCH_FLAGS -DGGML_CPU_GENERIC)
 diff --git a/ggml/src/ggml-cpu/arch-fallback.h b/ggml/src/ggml-cpu/arch-fallback.h
 index 41da829..d02ef66 100644
 --- a/ggml/src/ggml-cpu/arch-fallback.h
@@ -359,7 +340,7 @@ index 8b323bd..0c9299b 100644
  #endif
  
 diff --git a/ggml/src/ggml-cpu/ggml-cpu.cpp b/ggml/src/ggml-cpu/ggml-cpu.cpp
-index ddf1737..576f63c 100644
+index ddf1737..6a5f273 100644
 --- a/ggml/src/ggml-cpu/ggml-cpu.cpp
 +++ b/ggml/src/ggml-cpu/ggml-cpu.cpp
 @@ -37,6 +37,40 @@
@@ -367,9 +348,9 @@ index ddf1737..576f63c 100644
  #endif
  
 +#ifdef __MVS__
-+#define CVT_PTR 	0x10
-+#define CVTRCEP_OFFSET 	0x490
-+#define RCEAFC_OFFSET 	0x088
++#define CVT_PTR     0x10
++#define CVTRCEP_OFFSET     0x490
++#define RCEAFC_OFFSET     0x088
 +
 +typedef unsigned data_area_ptr_assign_type;
 +
@@ -378,7 +359,7 @@ index ddf1737..576f63c 100644
 +#if defined(_LP64)
 +        data_area_ptr_assign_type lower;
 +#endif
-+	data_area_ptr_assign_type assign;
++        data_area_ptr_assign_type assign;
 +    };
 +    char* deref;
 +} data_area_ptr;
@@ -436,13 +417,15 @@ index 3f85e53..710bca4 100644
                  }
  
 diff --git a/ggml/src/ggml-cpu/ops.h b/ggml/src/ggml-cpu/ops.h
-index 3fa1443..2cdb4f6 100644
+index 3fa1443..aba9ace 100644
 --- a/ggml/src/ggml-cpu/ops.h
 +++ b/ggml/src/ggml-cpu/ops.h
-@@ -1,5 +1,7 @@
+@@ -1,5 +1,9 @@
  #pragma once
  
++#ifdef GGML_USE_MASS
 +#include <mass.h>
++#endif
 +
  #include "ggml.h"
  
@@ -461,13 +444,15 @@ index 0deda93..37b72ca 100644
  #define GGML_SIMD
  
 diff --git a/ggml/src/ggml-cpu/unary-ops.h b/ggml/src/ggml-cpu/unary-ops.h
-index bcad5a3..b2185f5 100644
+index bcad5a3..911c674 100644
 --- a/ggml/src/ggml-cpu/unary-ops.h
 +++ b/ggml/src/ggml-cpu/unary-ops.h
-@@ -1,5 +1,7 @@
+@@ -1,5 +1,9 @@
  #pragma once
  
++#ifdef GGML_USE_MASS
 +#include <mass.h>
++#endif
 +
  #include "common.h"
  
@@ -1003,33 +988,25 @@ index 3198b33..d6e980a 100644
  inline static void ggml_vec_silu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
      for (int i = 0; i < n; ++i) {
 diff --git a/ggml/src/ggml-impl.h b/ggml/src/ggml-impl.h
-index 9256865..8b68014 100644
+index 9256865..965b4a6 100644
 --- a/ggml/src/ggml-impl.h
 +++ b/ggml/src/ggml-impl.h
-@@ -21,9 +21,21 @@
- //
- //   $ ln -sfn /Library/Developer/CommandLineTools/usr/lib/clang/13.1.6/include/arm_neon.h ./src/
- //
--#include <arm_neon.h>
-+#include <immintrin.h>
+@@ -24,6 +24,14 @@
+ #include <arm_neon.h>
  #endif
  
 +#if defined(__gnu_linux__)
 +#include <byteswap.h>
-+#elif defined(__MVS__)
++#else
 +#define bswap_16(x) __builtin_bswap16(x)
 +#define bswap_32(x) __builtin_bswap32(x)
 +#define bswap_64(x) __builtin_bswap64(x)
-+#else
-+#define bswap_16(x) (x)
-+#define bswap_32(x) (x)
-+#define bswap_64(x) (x)
 +#endif // defined(__gnu_linux__)
 +
  #ifdef __cplusplus
  extern "C" {
  #endif
-@@ -620,6 +632,18 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
+@@ -620,6 +628,18 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
  #define GGML_FP32_TO_BF16(x) ggml_compute_fp32_to_bf16(x)
  #define GGML_BF16_TO_FP32(x) ggml_compute_bf16_to_fp32(x)
  
@@ -1048,7 +1025,7 @@ index 9256865..8b68014 100644
  static inline int32_t ggml_node_get_use_count(const struct ggml_cgraph * cgraph, int node_idx) {
      const struct ggml_tensor * node = cgraph->nodes[node_idx];
  
-@@ -743,6 +767,31 @@ static inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph * cgraph,
+@@ -743,6 +763,31 @@ static inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph * cgraph,
  #include <array>
  #include <initializer_list>
  #include <vector>
@@ -1081,7 +1058,7 @@ index 9256865..8b68014 100644
  // nicer C++ syntax for ggml_can_fuse
  inline bool ggml_can_fuse(const struct ggml_cgraph * cgraph, int node_idx, std::initializer_list<enum ggml_op> ops) {
 diff --git a/ggml/src/ggml.c b/ggml/src/ggml.c
-index 4c0764a..5e25655 100644
+index 4c0764a..2b54279 100644
 --- a/ggml/src/ggml.c
 +++ b/ggml/src/ggml.c
 @@ -14,9 +14,13 @@
@@ -1099,23 +1076,16 @@ index 4c0764a..5e25655 100644
  #include <alloca.h>
  #endif
  
-@@ -322,6 +326,15 @@ void * ggml_aligned_malloc(size_t size) {
+@@ -322,6 +326,8 @@ void * ggml_aligned_malloc(size_t size) {
  
  #if defined(_MSC_VER) || defined(__MINGW32__)
      return _aligned_malloc(size, alignment);
 +#elif defined(__MVS__)
-+//    void * aligned_memory = NULL;
-+//    if (size ==0)
-+//	    size = 1;
-+//    aligned_memory = malloc(size);
-+//    int result = 0;
-+//    if (aligned_memory == NULL)
-+//	    result = errno;
 +    return __aligned_malloc(size, alignment);
  #else
      if (size == 0) {
          GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
-@@ -373,6 +386,8 @@ void ggml_aligned_free(void * ptr, size_t size) {
+@@ -373,6 +379,8 @@ void ggml_aligned_free(void * ptr, size_t size) {
      GGML_UNUSED(size);
  #if defined(_MSC_VER) || defined(__MINGW32__)
      _aligned_free(ptr);
@@ -1124,291 +1094,291 @@ index 4c0764a..5e25655 100644
  #elif GGML_USE_CPU_HBM
      if (ptr != NULL) {
          hbw_free(ptr);
-@@ -606,6 +621,35 @@ FILE * ggml_fopen(const char * fname, const char * mode) {
+@@ -606,6 +614,35 @@ FILE * ggml_fopen(const char * fname, const char * mode) {
  
  }
  
-+static void ggml_byteswap_i16 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_i32 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_i64 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q4_0 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q4_1 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q5_0 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q5_1	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q8_0	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q8_1	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q2_k	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q3_k 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q4_k 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q5_k 	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q6_k	  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_iq2_xxs (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_iq2_xs  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_iq3_xxs (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_iq3_s   (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_iq2_s   (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_iq1_s   (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_iq4_nl  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_iq4_xs  (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_q8_k 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_i16    (void * restrict buffer, size_t elements);
++static void ggml_byteswap_i32    (void * restrict buffer, size_t elements);
++static void ggml_byteswap_i64    (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_0  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_1  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q5_0  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q5_1  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q8_0  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q8_1  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q2_k  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q3_k  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_k  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q5_k  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q6_k  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq2_xxs(void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq2_xs (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq3_xxs(void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq3_s  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq2_s  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq1_s  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq4_nl (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq4_xs (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q8_k  (void * restrict buffer, size_t elements);
 +static void ggml_byteswap_q4_0_4x4(void * restrict buffer, size_t elements);
 +static void ggml_byteswap_q4_0_4x8(void * restrict buffer, size_t elements);
 +static void ggml_byteswap_q4_0_8x8(void * restrict buffer, size_t elements);
-+static void ggml_byteswap_tq1_0   (void * restrict buffer, size_t elements);
-+static void ggml_byteswap_tq2_0   (void * restrict buffer, size_t elements);
++static void ggml_byteswap_tq1_0 (void * restrict buffer, size_t elements);
++static void ggml_byteswap_tq2_0 (void * restrict buffer, size_t elements);
 +
  static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
      [GGML_TYPE_I8] = {
          .type_name                = "i8",
-@@ -618,30 +662,35 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -618,30 +655,35 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .blck_size                = 1,
          .type_size                = sizeof(int16_t),
          .is_quantized             = false,
-+	.byteswap		  = ggml_byteswap_i16,
++        .byteswap                 = ggml_byteswap_i16,
      },
      [GGML_TYPE_I32] = {
          .type_name                = "i32",
          .blck_size                = 1,
          .type_size                = sizeof(int32_t),
          .is_quantized             = false,
-+	.byteswap		  = ggml_byteswap_i32,
++        .byteswap                 = ggml_byteswap_i32,
      },
      [GGML_TYPE_I64] = {
          .type_name                = "i64",
          .blck_size                = 1,
          .type_size                = sizeof(int64_t),
          .is_quantized             = false,
-+	.byteswap		  = ggml_byteswap_i64,
++        .byteswap                 = ggml_byteswap_i64,
      },
      [GGML_TYPE_F64] = {
          .type_name                = "f64",
          .blck_size                = 1,
          .type_size                = sizeof(double),
          .is_quantized             = false,
-+	.byteswap		  = ggml_byteswap_i64,
++        .byteswap                 = ggml_byteswap_i64,
      },
      [GGML_TYPE_F32] = {
          .type_name                = "f32",
          .blck_size                = 1,
          .type_size                = sizeof(float),
          .is_quantized             = false,
-+	.byteswap		  = ggml_byteswap_i32,
++        .byteswap                 = ggml_byteswap_i32,
      },
      [GGML_TYPE_F16] = {
          .type_name                = "f16",
-@@ -650,6 +699,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -650,6 +692,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = false,
          .to_float                 = (ggml_to_float_t) ggml_fp16_to_fp32_row,
          .from_float_ref           = (ggml_from_float_t) ggml_fp32_to_fp16_row,
-+	.byteswap		  = ggml_byteswap_i16,
++        .byteswap                 = ggml_byteswap_i16,
      },
      [GGML_TYPE_Q4_0] = {
          .type_name                = "q4_0",
-@@ -658,6 +708,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -658,6 +701,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q4_0,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q4_0_ref,
-+	.byteswap		  = ggml_byteswap_q4_0,
++        .byteswap                 = ggml_byteswap_q4_0,
      },
      [GGML_TYPE_Q4_1] = {
          .type_name                = "q4_1",
-@@ -666,6 +717,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -666,6 +710,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q4_1,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q4_1_ref,
-+	.byteswap		  = ggml_byteswap_q4_1,
++        .byteswap                 = ggml_byteswap_q4_1,
      },
      [4] = { // GGML_TYPE_Q4_2
          .type_name                = "DEPRECATED",
-@@ -686,6 +738,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -686,6 +731,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q5_0,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q5_0_ref,
-+	.byteswap		  = ggml_byteswap_q5_0,
++        .byteswap                 = ggml_byteswap_q5_0,
      },
      [GGML_TYPE_Q5_1] = {
          .type_name                = "q5_1",
-@@ -694,6 +747,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -694,6 +740,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q5_1,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q5_1_ref,
-+	.byteswap		  = ggml_byteswap_q5_1,
++        .byteswap                 = ggml_byteswap_q5_1,
      },
      [GGML_TYPE_Q8_0] = {
          .type_name                = "q8_0",
-@@ -702,6 +756,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -702,6 +749,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q8_0,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q8_0_ref,
-+	.byteswap		  = ggml_byteswap_q8_0,
++        .byteswap                 = ggml_byteswap_q8_0,
      },
      [GGML_TYPE_Q8_1] = {
          .type_name                = "q8_1",
-@@ -709,6 +764,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -709,6 +757,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .type_size                = sizeof(block_q8_1),
          .is_quantized             = true,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q8_1_ref,
-+	.byteswap		  = ggml_byteswap_q8_1,
++        .byteswap                 = ggml_byteswap_q8_1,
      },
      [GGML_TYPE_MXFP4] = {
          .type_name                = "mxfp4",
-@@ -733,6 +789,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -733,6 +782,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q2_K,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q2_K_ref,
-+	.byteswap		  = ggml_byteswap_q2_k,
++        .byteswap                 = ggml_byteswap_q2_k,
      },
      [GGML_TYPE_Q3_K] = {
          .type_name                = "q3_K",
-@@ -741,6 +798,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -741,6 +791,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q3_K,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q3_K_ref,
-+	.byteswap		  = ggml_byteswap_q3_k,
++        .byteswap                 = ggml_byteswap_q3_k,
      },
      [GGML_TYPE_Q4_K] = {
          .type_name                = "q4_K",
-@@ -749,6 +807,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -749,6 +800,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q4_K,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q4_K_ref,
-+	.byteswap		  = ggml_byteswap_q4_k,
++        .byteswap                 = ggml_byteswap_q4_k,
      },
      [GGML_TYPE_Q5_K] = {
          .type_name                = "q5_K",
-@@ -757,6 +816,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -757,6 +809,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q5_K,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q5_K_ref,
-+	.byteswap		  = ggml_byteswap_q5_k,
++        .byteswap                 = ggml_byteswap_q5_k,
      },
      [GGML_TYPE_Q6_K] = {
          .type_name                = "q6_K",
-@@ -765,6 +825,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -765,6 +818,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_q6_K,
          .from_float_ref           = (ggml_from_float_t) quantize_row_q6_K_ref,
-+	.byteswap		  = ggml_byteswap_q6_k,
++        .byteswap                 = ggml_byteswap_q6_k,
      },
      [GGML_TYPE_IQ2_XXS] = {
          .type_name                = "iq2_xxs",
-@@ -773,6 +834,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -773,6 +827,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_iq2_xxs,
          .from_float_ref           = NULL,
-+	.byteswap		  = ggml_byteswap_iq2_xxs,
++        .byteswap                 = ggml_byteswap_iq2_xxs,
      },
      [GGML_TYPE_IQ2_XS] = {
          .type_name                = "iq2_xs",
-@@ -781,6 +843,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -781,6 +836,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_iq2_xs,
          .from_float_ref           = NULL,
-+	.byteswap		  = ggml_byteswap_iq2_xs,
++        .byteswap                 = ggml_byteswap_iq2_xs,
      },
      [GGML_TYPE_IQ3_XXS] = {
          .type_name                = "iq3_xxs",
-@@ -789,6 +852,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -789,6 +845,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_iq3_xxs,
          .from_float_ref           = (ggml_from_float_t)quantize_row_iq3_xxs_ref,
-+	.byteswap		  = ggml_byteswap_iq3_xxs,
++        .byteswap                 = ggml_byteswap_iq3_xxs,
      },
      [GGML_TYPE_IQ3_S] = {
          .type_name                = "iq3_s",
-@@ -797,6 +861,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -797,6 +854,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_iq3_s,
          .from_float_ref           = (ggml_from_float_t)quantize_row_iq3_s_ref,
-+	.byteswap		  = ggml_byteswap_iq3_s,
++        .byteswap                 = ggml_byteswap_iq3_s,
      },
      [GGML_TYPE_IQ2_S] = {
          .type_name                = "iq2_s",
-@@ -805,6 +870,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -805,6 +863,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_iq2_s,
          .from_float_ref           = (ggml_from_float_t)quantize_row_iq2_s_ref,
-+	.byteswap		  = ggml_byteswap_iq2_s,
++        .byteswap                 = ggml_byteswap_iq2_s,
      },
      [GGML_TYPE_IQ1_S] = {
          .type_name                = "iq1_s",
-@@ -813,6 +879,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -813,6 +872,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_iq1_s,
          .from_float_ref           = NULL,
-+	.byteswap		  = ggml_byteswap_iq1_s,
++        .byteswap                 = ggml_byteswap_iq1_s,
      },
      [GGML_TYPE_IQ1_M] = {
          .type_name                = "iq1_m",
-@@ -829,6 +896,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -829,6 +889,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_iq4_nl,
          .from_float_ref           = (ggml_from_float_t)quantize_row_iq4_nl_ref,
-+	.byteswap		  = ggml_byteswap_iq4_nl,
++        .byteswap                 = ggml_byteswap_iq4_nl,
      },
      [GGML_TYPE_IQ4_XS] = {
          .type_name                = "iq4_xs",
-@@ -837,12 +905,14 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -837,12 +898,14 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_iq4_xs,
          .from_float_ref           = (ggml_from_float_t)quantize_row_iq4_xs_ref,
-+	.byteswap		  = ggml_byteswap_iq4_xs,
++        .byteswap                 = ggml_byteswap_iq4_xs,
      },
      [GGML_TYPE_Q8_K] = {
          .type_name                = "q8_K",
          .blck_size                = QK_K,
          .type_size                = sizeof(block_q8_K),
          .is_quantized             = true,
-+	.byteswap		  = ggml_byteswap_q8_k,
++        .byteswap                 = ggml_byteswap_q8_k,
      },
      [GGML_TYPE_BF16] = {
          .type_name                = "bf16",
-@@ -851,24 +921,28 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -851,24 +914,28 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = false,
          .to_float                 = (ggml_to_float_t) ggml_bf16_to_fp32_row,
          .from_float_ref           = (ggml_from_float_t) ggml_fp32_to_bf16_row_ref,
-+	.byteswap		  = ggml_byteswap_i16,
++        .byteswap                 = ggml_byteswap_i16,
      },
      [31] = { // GGML_TYPE_Q4_0_4_4
          .type_name                = "TYPE_Q4_0_4_4 REMOVED, use Q4_0 with runtime repacking",
          .blck_size                = 0,
          .type_size                = 0,
          .is_quantized             = false,
-+	.byteswap		  = ggml_byteswap_q4_0_4x4,
++        .byteswap                 = ggml_byteswap_q4_0_4x4,
      },
      [32] = { // GGML_TYPE_Q4_0_4_8
          .type_name                = "TYPE_Q4_0_4_8 REMOVED, use Q4_0 with runtime repacking",
          .blck_size                = 0,
          .type_size                = 0,
          .is_quantized             = false,
-+	.byteswap		  = ggml_byteswap_q4_0_4x8,
++        .byteswap                 = ggml_byteswap_q4_0_4x8,
      },
      [33] = { // GGML_TYPE_Q4_0_8_8
          .type_name                = "TYPE_Q4_0_8_8 REMOVED, use Q4_0 with runtime repacking",
          .blck_size                = 0,
          .type_size                = 0,
          .is_quantized             = false,
-+	.byteswap		  = ggml_byteswap_q4_0_8x8,
++        .byteswap                 = ggml_byteswap_q4_0_8x8,
      },
      [GGML_TYPE_TQ1_0] = {
          .type_name                = "tq1_0",
-@@ -877,6 +951,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -877,6 +944,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_tq1_0,
          .from_float_ref           = (ggml_from_float_t) quantize_row_tq1_0_ref,
-+	.byteswap		  = ggml_byteswap_tq1_0,
++        .byteswap                 = ggml_byteswap_tq1_0,
      },
      [GGML_TYPE_TQ2_0] = {
          .type_name                = "tq2_0",
-@@ -885,6 +960,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+@@ -885,6 +953,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
          .is_quantized             = true,
          .to_float                 = (ggml_to_float_t) dequantize_row_tq2_0,
          .from_float_ref           = (ggml_from_float_t) quantize_row_tq2_0_ref,
-+	.byteswap		  = ggml_byteswap_tq2_0,
++        .byteswap                 = ggml_byteswap_tq2_0,
      },
      [36] = { // GGML_TYPE_IQ4_NL_4_4
          .type_name                = "TYPE_IQ4_NL_4_4 REMOVED, use IQ4_NL with runtime repacking",
-@@ -7734,3 +7810,215 @@ bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, cons
+@@ -7734,3 +7803,215 @@ bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, cons
      if (p0->strict_cpu     != p1->strict_cpu )    return false;
      return memcmp(p0->cpumask, p1->cpumask, GGML_MAX_N_THREADS) == 0;
  }
@@ -1416,180 +1386,180 @@ index 4c0764a..5e25655 100644
 +static void ggml_byteswap_i16(void * restrict buffer, size_t elements) {
 +    uint16_t *data_ptr = (uint16_t*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(data_ptr + i);
++    ggml_bswap16(data_ptr + i);
 +    }
 +}
 +
 +static void ggml_byteswap_i32(void * restrict buffer, size_t elements) {
 +    uint32_t *data_ptr = (uint32_t*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap32(data_ptr + i);
++    ggml_bswap32(data_ptr + i);
 +    }
 +}
 +
 +static void ggml_byteswap_i64(void * restrict buffer, size_t elements) {
 +    uint64_t *data_ptr = (uint64_t*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap64(data_ptr + i);
++    ggml_bswap64(data_ptr + i);
 +    }
 +}
 +
 +static void ggml_byteswap_q4_0(void * restrict buffer, size_t elements) {
 +    block_q4_0 *data_ptr = (block_q4_0*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_q4_1(void * restrict buffer, size_t elements) {
 +    block_q4_1 *data_ptr = (block_q4_1*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	ggml_bswap16(&(data_ptr[i].m));
++    ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].m));
 +    }
 +}
 +
 +static void ggml_byteswap_q5_0(void * restrict buffer, size_t elements) {
 +    block_q5_0 *data_ptr = (block_q5_0*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_q5_1(void * restrict buffer, size_t elements) {
 +    block_q5_1 *data_ptr = (block_q5_1*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	ggml_bswap16(&(data_ptr[i].m));
++    ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].m));
 +    }
 +}
 +
 +static void ggml_byteswap_q8_0(void * restrict buffer, size_t elements) {
 +    block_q8_0 *data_ptr = (block_q8_0*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_q8_1(void * restrict buffer, size_t elements) {
 +    block_q8_1 *data_ptr = (block_q8_1*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	ggml_bswap16(&(data_ptr[i].s));
++    ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].s));
 +    }
 +}
 +
 +static void ggml_byteswap_q2_k(void * restrict buffer, size_t elements) {
 +    block_q2_K *data_ptr = (block_q2_K*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	ggml_bswap16(&(data_ptr[i].dmin));
++    ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].dmin));
 +    }
 +}
 +
 +static void ggml_byteswap_q3_k(void * restrict buffer, size_t elements) {
 +    block_q3_K *data_ptr = (block_q3_K*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_q4_k(void * restrict buffer, size_t elements) {
 +    block_q4_K *data_ptr = (block_q4_K*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	ggml_bswap16(&(data_ptr[i].dmin));
++    ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].dmin));
 +    }
 +}
 +
 +static void ggml_byteswap_q5_k(void * restrict buffer, size_t elements) {
 +    block_q5_K *data_ptr = (block_q5_K*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	ggml_bswap16(&(data_ptr[i].dmin));
++    ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].dmin));
 +    }
 +}
 +
 +static void ggml_byteswap_q6_k(void * restrict buffer, size_t elements) {
 +    block_q6_K *data_ptr = (block_q6_K*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_iq2_xxs(void * restrict buffer, size_t elements) {
 +    block_iq2_xxs *data_ptr = (block_iq2_xxs*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	for (size_t j = 0; j < QK_K/8; ++j) {
-+	    ggml_bswap16(&(data_ptr[i].qs[j]));
-+	}
++    ggml_bswap16(&(data_ptr[i].d));
++    for (size_t j = 0; j < QK_K/8; ++j) {
++        ggml_bswap16(&(data_ptr[i].qs[j]));
++    }
 +    }
 +}
 +
 +static void ggml_byteswap_iq2_xs(void * restrict buffer, size_t elements) {
 +    block_iq2_xs *data_ptr = (block_iq2_xs*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	for (size_t j = 0; j < QK_K/8; ++j) {
-+	    ggml_bswap16(&(data_ptr[i].qs[j]));
-+	}
++    ggml_bswap16(&(data_ptr[i].d));
++    for (size_t j = 0; j < QK_K/8; ++j) {
++        ggml_bswap16(&(data_ptr[i].qs[j]));
++    }
 +    }
 +}
 +
 +static void ggml_byteswap_iq3_xxs(void * restrict buffer, size_t elements) {
 +    block_iq3_xxs *data_ptr = (block_iq3_xxs*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_iq3_s(void * restrict buffer, size_t elements) {
 +    block_iq3_s *data_ptr = (block_iq3_s*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_iq2_s(void * restrict buffer, size_t elements) {
 +    block_iq2_s *data_ptr = (block_iq2_s*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_iq1_s(void * restrict buffer, size_t elements) {
 +    block_iq1_s *data_ptr = (block_iq1_s*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	for (size_t j = 0; j < QK_K/32; ++j) {
-+	    ggml_bswap16(&(data_ptr[i].qh[j]));
-+	}
++    ggml_bswap16(&(data_ptr[i].d));
++    for (size_t j = 0; j < QK_K/32; ++j) {
++        ggml_bswap16(&(data_ptr[i].qh[j]));
++    }
 +    }
 +}
 +
 +static void ggml_byteswap_iq4_nl(void * restrict buffer, size_t elements) {
 +    block_iq4_nl *data_ptr = (block_iq4_nl*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_iq4_xs(void * restrict buffer, size_t elements) {
 +    block_iq4_xs *data_ptr = (block_iq4_xs*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
-+	ggml_bswap16(&(data_ptr[i].scales_h));
++    ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].scales_h));
 +    }
 +}
 +
 +static void ggml_byteswap_q8_k(void * restrict buffer, size_t elements) {
 +    block_q8_K *data_ptr = (block_q8_K*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap32(&(data_ptr[i].d));
-+	for (size_t j = 0; j < QK_K/16; ++j) {
-+	    ggml_bswap16(&(data_ptr[i].bsums[j]));
-+	}
++    ggml_bswap32(&(data_ptr[i].d));
++    for (size_t j = 0; j < QK_K/16; ++j) {
++        ggml_bswap16(&(data_ptr[i].bsums[j]));
++    }
 +    }
 +}
 +
@@ -1614,18 +1584,18 @@ index 4c0764a..5e25655 100644
 +static void ggml_byteswap_tq1_0(void * restrict buffer, size_t elements) {
 +    block_tq1_0 *data_ptr = (block_tq1_0*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 +
 +static void ggml_byteswap_tq2_0(void * restrict buffer, size_t elements) {
 +    block_tq2_0 *data_ptr = (block_tq2_0*) buffer;
 +    for (size_t i = 0; i < elements; ++i) {
-+	ggml_bswap16(&(data_ptr[i].d));
++    ggml_bswap16(&(data_ptr[i].d));
 +    }
 +}
 diff --git a/ggml/src/gguf.cpp b/ggml/src/gguf.cpp
-index cbeedf6..de748fc 100644
+index cbeedf6..4c20bfe 100644
 --- a/ggml/src/gguf.cpp
 +++ b/ggml/src/gguf.cpp
 @@ -225,9 +225,12 @@ struct gguf_context {
@@ -1664,15 +1634,15 @@ index cbeedf6..de748fc 100644
      int64_t n_tensors = 0;
  
      if (ok && gr.read(ctx->version)) {
-+	uint32_t original_version = ctx->version;
++        uint32_t original_version = ctx->version;
 +
-+	if ((params.allow_byteswapping) && ((ctx->version & 0x0000FFFF) == 0) && ((ctx->version & 0xFFFF0000) != 0)) {
-+	    // most likely different endianness, do byteswapping
-+	    gr.do_byteswap = true;
-+	    ctx->needs_byteswap = true;
-+	    ggml_bswap(&(ctx->version));
-+	    GGML_LOG_INFO("%s: Entered byteswapping, corrected version from %" PRIu32 "to new GGUF file version %" PRIu32 "\n", __func__, original_version, ctx->version);
-+	}
++        if ((params.allow_byteswapping) && ((ctx->version & 0x0000FFFF) == 0) && ((ctx->version & 0xFFFF0000) != 0)) {
++            // most likely different endianness, do byteswapping
++            gr.do_byteswap = true;
++            ctx->needs_byteswap = true;
++            ggml_bswap(&(ctx->version));
++            GGML_LOG_INFO("%s: Entered byteswapping, corrected version from %" PRIu32 " to new GGUF file version %" PRIu32 "\n", __func__, original_version, ctx->version);
++        }
 +
          if (ok && ctx->version == 0) {
              GGML_LOG_ERROR("%s: bad GGUF version: %" PRIu32 "\n", __func__, ctx->version);
@@ -1711,42 +1681,33 @@ index 010dfee..bdc1685 100644
                      if shard_bar is not None:
                          shard_bar.update(ti.nbytes)
 diff --git a/src/llama-adapter.cpp b/src/llama-adapter.cpp
-index 2f2cc12..627ef93 100644
+index 2f2cc12..56c7369 100644
 --- a/src/llama-adapter.cpp
 +++ b/src/llama-adapter.cpp
 @@ -153,6 +153,7 @@ static void llama_adapter_lora_init_impl(llama_model & model, const char * path_
      gguf_init_params meta_gguf_params = {
          /* .no_alloc = */ true,
          /* .ctx      = */ &ctx_init,
-+	/* .allow_byteswapping = */ true,
++        /* .allow_byteswapping = */ true,
      };
  
      gguf_context_ptr ctx_gguf { gguf_init_from_file(path_lora, meta_gguf_params) };
 diff --git a/src/llama-context.cpp b/src/llama-context.cpp
-index 6aa7363..58b4eb4 100644
+index 6aa7363..2b8d388 100644
 --- a/src/llama-context.cpp
 +++ b/src/llama-context.cpp
-@@ -1863,12 +1863,17 @@ int llama_context::decode(const llama_batch & batch_inp) {
-                 // remember the swaps and apply them lazily upon logits/embeddings access
+@@ -1864,7 +1864,9 @@ int llama_context::decode(const llama_batch & batch_inp) {
                  output_swaps.push_back({ i, j_min });
              }
--
-+	
-+            #ifndef __MVS__
-             std::fill(output_ids.begin(), output_ids.end(), -1);
--
-+	    #else
-+	    for (auto& id: output_ids) {
-+		id = -1;
-+	    }
+ 
+-            std::fill(output_ids.begin(), output_ids.end(), -1);
++            for (auto & id : output_ids) {
++                id = -1;
++            }
+ 
              for (uint32_t i = 0; i < n_outputs; ++i) {
                  output_ids[out_ids[i]] = i;
-             }
-+	    #endif
-         }
-     }
- 
-@@ -2004,7 +2009,9 @@ uint32_t llama_context::output_reserve(int32_t n_outputs) {
+@@ -2004,7 +2006,9 @@ uint32_t llama_context::output_reserve(int32_t n_outputs) {
      }
  
      // set all ids as invalid (negative)
@@ -1770,7 +1731,7 @@ index 78c0bc2..836cf38 100644
  
  // bump if necessary
 diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
-index 413f34c..04a17af 100644
+index 413f34c..381aa0a 100644
 --- a/src/llama-model-loader.cpp
 +++ b/src/llama-model-loader.cpp
 @@ -535,8 +535,9 @@ llama_model_loader::llama_model_loader(
@@ -1802,8 +1763,8 @@ index 413f34c..04a17af 100644
          LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
          use_mmap = false;
 +    } else if (gguf_needs_byteswap(metadata)) {
-+	LLAMA_LOG_WARN("%s: gguf file needs byteswapping, mmap is disabled. This may affect performance.\n", __func__);
-+	use_mmap = false;
++        LLAMA_LOG_WARN("%s: gguf file needs byteswapping, mmap is disabled. This may affect performance.\n", __func__);
++        use_mmap = false;
      }
  
      this->use_mmap = use_mmap;
@@ -1812,12 +1773,12 @@ index 413f34c..04a17af 100644
          file->seek(w.offs, SEEK_SET);
          file->read_raw(cur->data, ggml_nbytes(cur));
 +
-+	if (gguf_needs_byteswap(metadata)) {
-+	    auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
-+	    if (byteswap != nullptr) {
-+		byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
-+	    }
-+	}
++        if (gguf_needs_byteswap(metadata)) {
++            auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++            if (byteswap != nullptr) {
++                byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
++            }
++        }
      }
  
      if (check_tensors && !ggml_validate_row_data(cur->type, cur->data, ggml_nbytes(cur))) {
@@ -1826,12 +1787,12 @@ index 413f34c..04a17af 100644
                  file->seek(weight->offs, SEEK_SET);
                  file->read_raw(cur->data, n_size);
 +
-+	        if (gguf_needs_byteswap(metadata)) {
-+	            auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
-+	            if (byteswap != nullptr) {
-+		        byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
-+	            }
-+	        }
++                if (gguf_needs_byteswap(metadata)) {
++                    auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++                    if (byteswap != nullptr) {
++                        byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
++                    }
++                }
 +
                  if (check_tensors) {
                      validation_result.emplace_back(std::async(std::launch::async, [cur, n_size] {
@@ -1867,24 +1828,24 @@ index 413f34c..04a17af 100644
                      read_buf.resize(n_size);
                      file->seek(weight->offs, SEEK_SET);
                      file->read_raw(read_buf.data(), n_size);
-+		    if (gguf_needs_byteswap(metadata)) {
-+	    		auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
-+	    		if (byteswap != nullptr) {
-+			    byteswap(read_buf.data(), ggml_nelements(cur) / ggml_blck_size(cur->type));
-+	    		}
-+		    }
++                    if (gguf_needs_byteswap(metadata)) {
++                        auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++                        if (byteswap != nullptr) {
++                            byteswap(read_buf.data(), ggml_nelements(cur) / ggml_blck_size(cur->type));
++                        }
++                    }
                      ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
                      if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
                          throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
 diff --git a/tests/test-gguf.cpp b/tests/test-gguf.cpp
-index 8ebd16b..f4c2e4b 100644
+index 8ebd16b..7ebf8cf 100644
 --- a/tests/test-gguf.cpp
 +++ b/tests/test-gguf.cpp
 @@ -740,6 +740,7 @@ static std::pair<int, int> test_handcrafted_file(const unsigned int seed) {
          struct gguf_init_params gguf_params = {
              /*no_alloc =*/ false,
              /*ctx      =*/ hft >= offset_has_data ? &ctx : nullptr,
-+	    /*.allow_byteswapping = */ true,
++            /*.allow_byteswapping = */ true,
          };
  
          struct gguf_context * gguf_ctx = gguf_init_from_file_impl(file, gguf_params);
@@ -1892,42 +1853,41 @@ index 8ebd16b..f4c2e4b 100644
      struct gguf_init_params gguf_params = {
          /*no_alloc =*/ false,
          /*ctx      =*/ only_meta ? nullptr : &ctx_1,
-+	/*.allow_byteswapping = */ true,
++        /*.allow_byteswapping = */ true,
      };
      struct gguf_context * gguf_ctx_1 = gguf_init_from_file_impl(file, gguf_params);
  
 diff --git a/tools/export-lora/export-lora.cpp b/tools/export-lora/export-lora.cpp
-index 50774c5..beb016e 100644
+index 50774c5..84d2b0b 100644
 --- a/tools/export-lora/export-lora.cpp
 +++ b/tools/export-lora/export-lora.cpp
 @@ -51,6 +51,7 @@ static struct gguf_context * load_gguf(std::string & fname, struct ggml_context
      struct gguf_init_params params = {
          /*.no_alloc = */ true,
          /*.ctx      = */ ctx_ggml,
-+	/*.allow_byteswapping = */ true,
++        /*.allow_byteswapping = */ true,
      };
      struct gguf_context * ctx_gguf = gguf_init_from_file(fname.c_str(), params);
      if (!ctx_gguf) {
 diff --git a/tools/gguf-split/gguf-split.cpp b/tools/gguf-split/gguf-split.cpp
-index f99f029..be4e2a4 100644
+index f99f029..c3197b8 100644
 --- a/tools/gguf-split/gguf-split.cpp
 +++ b/tools/gguf-split/gguf-split.cpp
 @@ -329,14 +329,20 @@ struct split_strategy {
                  const char * t_name = gguf_get_tensor_name(ctx_out, i);
                  struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
                  auto n_bytes = ggml_nbytes(t);
--                read_buf.resize(n_bytes);
 +                auto n_elements = ggml_nelements(t) / ggml_blck_size(t->type);
-+		read_buf.resize(n_bytes);
+                 read_buf.resize(n_bytes);
  
                  // calculate offset
                  auto i_tensor_in = gguf_find_tensor(ctx_gguf, t_name); // idx of tensor in the input file
                  auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor_in);
  
-+		ggml_byteswap_t byteswap_func = nullptr;
-+		if (gguf_needs_byteswap(ctx_gguf)) {
-+		    byteswap_func = ggml_get_type_traits(t->type)->byteswap;
-+		}
++                ggml_byteswap_t byteswap_func = nullptr;
++                if (gguf_needs_byteswap(ctx_gguf)) {
++                    byteswap_func = ggml_get_type_traits(t->type)->byteswap;
++                }
 +
                  // copy tensor from input to output file
 -                copy_file_to_file(f_input, fout, offset, n_bytes);
@@ -1948,9 +1908,9 @@ index f99f029..be4e2a4 100644
          f_in.seekg(in_offset);
          f_in.read((char *)read_buf.data(), len);
 +
-+	if (byteswap_func != nullptr) {
-+	    byteswap_func(read_buf.data(), elements);
-+	}
++        if (byteswap_func != nullptr) {
++            byteswap_func(read_buf.data(), elements);
++        }
 +
          f_out.write((const char *)read_buf.data(), len);
      }
@@ -1959,7 +1919,7 @@ index f99f029..be4e2a4 100644
      struct gguf_init_params params = {
          /*.no_alloc = */ true,
          /*.ctx      = */ &ctx_meta,
-+	/*.allow_byteswapping = */ true,
++        /*.allow_byteswapping = */ true,
      };
  
      std::ifstream f_input(split_params.input.c_str(), std::ios::binary);
@@ -1967,63 +1927,77 @@ index f99f029..be4e2a4 100644
          struct gguf_init_params params = {
              /*.no_alloc = */ true,
              /*.ctx      = */ &ctx_meta,
-+	    /*.allow_byteswapping = */ true,
++            /*.allow_byteswapping = */ true,
          };
  
          if (i_split > 0) {
-@@ -540,7 +553,15 @@ static void gguf_merge(const split_params & split_params) {
+@@ -540,6 +553,14 @@ static void gguf_merge(const split_params & split_params) {
              auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor);
              f_input.seekg(offset);
              f_input.read((char *)read_data.data(), n_bytes);
--            if (!split_params.dry_run) {
-+            
-+	    if (gguf_needs_byteswap(ctx_gguf)) {
-+		auto byteswap = ggml_get_type_traits(t->type)->byteswap;
-+		if (byteswap != nullptr) {
-+		    byteswap(read_data.data(), ggml_nelements(t) / ggml_blck_size(t->type));
-+		}
-+	    }
-+	    
-+	    if (!split_params.dry_run) {
++
++            if (gguf_needs_byteswap(ctx_gguf)) {
++                auto byteswap = ggml_get_type_traits(t->type)->byteswap;
++                if (byteswap != nullptr) {
++                    byteswap(read_data.data(), ggml_nelements(t) / ggml_blck_size(t->type));
++                }
++            }
++
+             if (!split_params.dry_run) {
                  // write tensor data + padding
                  fout.write((const char *)read_data.data(), n_bytes);
-                 zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);
 diff --git a/tools/imatrix/imatrix.cpp b/tools/imatrix/imatrix.cpp
-index bbedb15..51f356b 100644
+index bbedb15..d994344 100644
 --- a/tools/imatrix/imatrix.cpp
 +++ b/tools/imatrix/imatrix.cpp
 @@ -719,6 +719,7 @@ bool IMatrixCollector::load_imatrix(const char * file_name) {
      struct gguf_init_params meta_gguf_params = {
          /* .no_alloc = */ false, // the data is needed
          /* .ctx      = */ &ctx,
-+	/* .allow_byteswapping = */ true,
++        /* .allow_byteswapping = */ true,
      };
      struct gguf_context * ctx_gguf = gguf_init_from_file(file_name, meta_gguf_params);
      if (!ctx_gguf) {
 diff --git a/tools/mtmd/clip.cpp b/tools/mtmd/clip.cpp
-index a47f1f4..f3f9fd7 100644
+index a47f1f4..fd3554d 100644
 --- a/tools/mtmd/clip.cpp
 +++ b/tools/mtmd/clip.cpp
 @@ -911,6 +911,7 @@ struct clip_model_loader {
          struct gguf_init_params params = {
              /*.no_alloc = */ true,
              /*.ctx      = */ &meta,
-+	    /*.allow_byteswapping = */ true,
++            /*.allow_byteswapping = */ true,
          };
  
          ctx_gguf = gguf_context_ptr(gguf_init_from_file(fname, params));
 diff --git a/tools/quantize/quantize.cpp b/tools/quantize/quantize.cpp
-index 24e0a46..da745db 100644
+index 24e0a46..2e6e764 100644
 --- a/tools/quantize/quantize.cpp
 +++ b/tools/quantize/quantize.cpp
 @@ -252,6 +252,7 @@ static int load_imatrix(const std::string & imatrix_file, std::vector<std::strin
      struct gguf_init_params meta_gguf_params = {
          /* .no_alloc = */ false, // the data is needed
          /* .ctx      = */ &ctx,
-+	/* .allow_byteswapping = */ true,
++        /* .allow_byteswapping = */ true,
      };
      struct gguf_context * ctx_gguf = gguf_init_from_file(imatrix_file.c_str(), meta_gguf_params);
      if (!ctx_gguf) {
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index b79a527..f7a8b65 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -638,6 +638,11 @@ private:
+             return false;
+         }
+ 
++        if (ctx == nullptr) {
++            SRV_ERR("failed to create context with model '%s'\n", params_base.model.path.c_str());
++            return false;
++        }
++
+         vocab = llama_model_get_vocab(model);
+ 
+         n_ctx = llama_n_ctx(ctx);
 diff --git a/vendor/cpp-httplib/httplib.cpp b/vendor/cpp-httplib/httplib.cpp
 index fa07182..8803a41 100644
 --- a/vendor/cpp-httplib/httplib.cpp
@@ -2272,7 +2246,7 @@ index fa07182..8803a41 100644
  
  // Helper to map wolfSSL error to ErrorCode.
 diff --git a/vendor/cpp-httplib/httplib.h b/vendor/cpp-httplib/httplib.h
-index 6ec949a..954ac6a 100644
+index 6ec949a..02a7aa1 100644
 --- a/vendor/cpp-httplib/httplib.h
 +++ b/vendor/cpp-httplib/httplib.h
 @@ -271,6 +271,9 @@ using socklen_t = int;
@@ -2285,23 +2259,6 @@ index 6ec949a..954ac6a 100644
  #ifndef NI_MAXHOST
  #define NI_MAXHOST 1025
  #endif
-@@ -500,6 +503,16 @@ using socket_t = int;
- /*
-  * Declaration
-  */
-+#ifdef __MVS__
-+#include <strings.h>
-+#include <zos-tls.h>
-+#include <sys/time.h>
-+#include <regex>
-+#ifndef NI_MAXHOST
-+#define NI_MAXHOST 1025
-+#endif
-+#endif
-+
- namespace httplib {
- 
- namespace ws {
 diff --git a/vendor/miniaudio/miniaudio.h b/vendor/miniaudio/miniaudio.h
 index c6d493e..910a0c6 100644
 --- a/vendor/miniaudio/miniaudio.h
@@ -2316,21 +2273,10 @@ index c6d493e..910a0c6 100644
      pthread_attr_t attr;
      if (pthread_attr_init(&attr) == 0) {
 diff --git a/vendor/stb/stb_image.h b/vendor/stb/stb_image.h
-index 9eedabe..92d5251 100644
+index 9eedabe..d506798 100644
 --- a/vendor/stb/stb_image.h
 +++ b/vendor/stb/stb_image.h
-@@ -620,6 +620,10 @@ STBIDEF int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const ch
-    #define stbi_inline __forceinline
- #endif
- 
-+#ifdef __MVS__
-+   #define STBI_NO_THREAD_LOCALS
-+#endif
-+
- #ifndef STBI_NO_THREAD_LOCALS
-    #if defined(__cplusplus) &&  __cplusplus >= 201103L
-       #define STBI_THREAD_LOCAL       thread_local
-@@ -721,6 +725,10 @@ typedef unsigned char validate_uint32[sizeof(stbi__uint32)==4 ? 1 : -1];
+@@ -721,6 +721,10 @@ typedef unsigned char validate_uint32[sizeof(stbi__uint32)==4 ? 1 : -1];
  #define STBI_NO_SIMD
  #endif
  
@@ -2341,7 +2287,7 @@ index 9eedabe..92d5251 100644
  #if !defined(STBI_NO_SIMD) && (defined(STBI__X86_TARGET) || defined(STBI__X64_TARGET))
  #define STBI_SSE2
  #include <emmintrin.h>
-@@ -963,11 +971,33 @@ static int      stbi__pnm_info(stbi__context *s, int *x, int *y, int *comp);
+@@ -963,11 +967,33 @@ static int      stbi__pnm_info(stbi__context *s, int *x, int *y, int *comp);
  static int      stbi__pnm_is16(stbi__context *s);
  #endif
  
