@@ -175,7 +175,7 @@ index 0587109..06d50e2 100644
  
  void ggml_backend_load_all_from_path(const char * dir_path) {
 diff --git a/ggml/src/ggml-cpu/CMakeLists.txt b/ggml/src/ggml-cpu/CMakeLists.txt
-index 1a1bbc9..be2211e 100644
+index 1a1bbc9..5e2a7f3 100644
 --- a/ggml/src/ggml-cpu/CMakeLists.txt
 +++ b/ggml/src/ggml-cpu/CMakeLists.txt
 @@ -56,7 +56,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
@@ -196,7 +196,7 @@ index 1a1bbc9..be2211e 100644
  
      if (GGML_SYSTEM_ARCH STREQUAL "ARM")
          message(STATUS "ARM detected")
-@@ -550,8 +550,18 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+@@ -550,8 +550,19 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
          message(STATUS "Wasm detected")
          list (APPEND GGML_CPU_SOURCES ggml-cpu/arch/wasm/quants.c)
      else()
@@ -213,6 +213,7 @@ index 1a1bbc9..be2211e 100644
 +	endif()
 +	target_include_directories(${GGML_CPU_NAME} PRIVATE /usr/include)
 +	target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
++	target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_MASS)
 +	message(STATUS "Found MASS: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
      endif()
  
@@ -464,10 +465,46 @@ index bcad5a3..b2185f5 100644
  
  #ifdef __cplusplus
 diff --git a/ggml/src/ggml-cpu/vec.cpp b/ggml/src/ggml-cpu/vec.cpp
-index d0e4001..8a10831 100644
+index d0e4001..96165dd 100644
 --- a/ggml/src/ggml-cpu/vec.cpp
 +++ b/ggml/src/ggml-cpu/vec.cpp
-@@ -424,6 +424,10 @@ void ggml_vec_silu_f32(const int n, float * y, const float * x) {
+@@ -395,6 +395,35 @@ void ggml_vec_dot_f16(int n, float * GGML_RESTRICT s, size_t bs, ggml_fp16_t * G
+ 
+ void ggml_vec_silu_f32(const int n, float * y, const float * x) {
+     int i = 0;
++#if defined(GGML_USE_MASS)
++    // MASS vectorized path: silu(x) = x / (1 + exp(-x))
++    {
++        int j = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++        const float32x4_t vneg1 = vec_splats(-1.0f);
++        const float32x4_t vone  = vec_splats(1.0f);
++        for (; j + 3 < n; j += 4) {
++            vec_xst(vec_mul(vec_xl(0, x + j), vneg1), 0, y + j);
++        }
++#endif
++        for (; j < n; j++) {
++            y[j] = -x[j];
++        }
++        int nn = n;
++        vsexp(y, y, &nn);
++        j = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++        for (; j + 3 < n; j += 4) {
++            float32x4_t vexp = vec_xl(0, y + j);
++            float32x4_t vx   = vec_xl(0, x + j);
++            vec_xst(vec_div(vx, vec_add(vone, vexp)), 0, y + j);
++        }
++#endif
++        for (; j < n; j++) {
++            y[j] = x[j] / (1.0f + y[j]);
++        }
++    }
++#else
+ #if defined(__AVX512F__) && defined(__AVX512DQ__)
+     for (; i + 15 < n; i += 16) {
+         _mm512_storeu_ps(y + i, ggml_v_silu(_mm512_loadu_ps(x + i)));
+@@ -424,14 +453,49 @@ void ggml_vec_silu_f32(const int n, float * y, const float * x) {
          vfloat32m2_t vy = ggml_v_silu_m2(vx, vl);
          __riscv_vse32_v_f32m2(&y[i], vy, vl);
      }
@@ -478,7 +515,46 @@ index d0e4001..8a10831 100644
  #endif
      for (; i < n; ++i) {
          y[i] = ggml_silu_f32(x[i]);
-@@ -462,6 +466,10 @@ void ggml_vec_swiglu_f32(const int n, float * y, const float * x, const float *
+     }
++#endif // GGML_USE_MASS
+ }
+ 
+ void ggml_vec_swiglu_f32(const int n, float * y, const float * x, const float * g) {
+     int i = 0;
++#if defined(GGML_USE_MASS)
++    // MASS vectorized path: swiglu(x,g) = silu(x) * g = x/(1+exp(-x)) * g
++    {
++        int j = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++        const float32x4_t vneg1 = vec_splats(-1.0f);
++        const float32x4_t vone  = vec_splats(1.0f);
++        for (; j + 3 < n; j += 4) {
++            vec_xst(vec_mul(vec_xl(0, x + j), vneg1), 0, y + j);
++        }
++#endif
++        for (; j < n; j++) {
++            y[j] = -x[j];
++        }
++        int nn = n;
++        vsexp(y, y, &nn);
++        j = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++        for (; j + 3 < n; j += 4) {
++            float32x4_t vexp = vec_xl(0, y + j);
++            float32x4_t vx   = vec_xl(0, x + j);
++            float32x4_t vg   = vec_xl(0, g + j);
++            vec_xst(vec_mul(vec_div(vx, vec_add(vone, vexp)), vg), 0, y + j);
++        }
++#endif
++        for (; j < n; j++) {
++            y[j] = (x[j] / (1.0f + y[j])) * g[j];
++        }
++    }
++#else
+ #if defined(__AVX512F__) && defined(__AVX512DQ__)
+     for (; i + 15 < n; i += 16) {
+         _mm512_storeu_ps(y + i, _mm512_mul_ps(ggml_v_silu(_mm512_loadu_ps(x + i)), _mm512_loadu_ps(g + i)));
+@@ -462,10 +526,15 @@ void ggml_vec_swiglu_f32(const int n, float * y, const float * x, const float *
          vfloat32m2_t vy = __riscv_vfmul_vv_f32m2(ggml_v_silu_m2(vx, vl), vg, vl);
          __riscv_vse32_v_f32m2(&y[i], vy, vl);
      }
@@ -489,7 +565,48 @@ index d0e4001..8a10831 100644
  #endif
      for (; i < n; ++i) {
          y[i] = ggml_silu_f32(x[i]) * g[i];
-@@ -606,6 +614,12 @@ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float
+     }
++#endif // GGML_USE_MASS
+ }
+ 
+ ggml_float ggml_vec_cvar_f32(const int n, float * y, const float * x, const float mean) {
+@@ -547,6 +616,35 @@ ggml_float ggml_vec_cvar_f32(const int n, float * y, const float * x, const floa
+ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float max) {
+     int i = 0;
+     ggml_float sum = 0;
++#if defined(GGML_USE_MASS)
++    // MASS vectorized path: y[i] = exp(x[i] - max), then sum
++    {
++        int j = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++        const float32x4_t vmax = vec_splats(max);
++        for (; j + 3 < n; j += 4) {
++            vec_xst(vec_sub(vec_xl(0, x + j), vmax), 0, y + j);
++        }
++#endif
++        for (; j < n; j++) {
++            y[j] = x[j] - max;
++        }
++        int nn = n;
++        vsexp(y, y, &nn);
++        j = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++        float32x4_t vsum = vec_splats(0.0f);
++        for (; j + 3 < n; j += 4) {
++            vsum = vec_add(vsum, vec_xl(0, y + j));
++        }
++        sum = (ggml_float)vec_hsum_f32x4(vsum);
++#endif
++        for (; j < n; j++) {
++            sum += (ggml_float)y[j];
++        }
++    }
++    return sum;
++#else
+ #if defined(__AVX512F__) && defined(__AVX512DQ__)
+     for (; i + 15 < n; i += 16) {
+         __m512 val = ggml_v_expf(_mm512_sub_ps(_mm512_loadu_ps(x + i),
+@@ -606,6 +704,12 @@ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float
          vsum = __riscv_vfwredusum_vs_f32m2_f64m1(val, vsum, avl);
      }
      return (ggml_float)__riscv_vfmv_f_s_f64m1_f64(vsum);
@@ -502,17 +619,30 @@ index d0e4001..8a10831 100644
  #endif
      for (; i < n; ++i) {
          float val = expf(x[i] - max);
+@@ -613,6 +717,7 @@ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float
+         y[i] = val;
+     }
+     return sum;
++#endif // GGML_USE_MASS
+ }
+ 
+ ggml_float ggml_vec_log_soft_max_f32(const int n, float * y, const float * x, float max) {
 diff --git a/ggml/src/ggml-cpu/vec.h b/ggml/src/ggml-cpu/vec.h
-index 3198b33..1440685 100644
+index 3198b33..90240e9 100644
 --- a/ggml/src/ggml-cpu/vec.h
 +++ b/ggml/src/ggml-cpu/vec.h
-@@ -1,4 +1,5 @@
- // Vectorized functions for fundamental operations
-+#include <mass.h>
+@@ -7,6 +7,10 @@
+ #include "ggml.h"
+ #include "ggml-cpu.h"
  
- #pragma once
- 
-@@ -66,6 +67,12 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
++#if defined(GGML_USE_MASS)
++#include <massv.h>
++#endif
++
+ #if defined(GGML_USE_ACCELERATE)
+ #include <Accelerate/Accelerate.h>
+ #endif
+@@ -66,6 +70,12 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
          __m256 vz = _mm256_add_ps(vx, vy);
          _mm256_storeu_ps(z + i, vz);
      }
@@ -525,7 +655,7 @@ index 3198b33..1440685 100644
  #endif
      for (; i < n; ++i) {
          z[i] = x[i] + y[i];
-@@ -73,37 +80,137 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
+@@ -73,37 +83,137 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
  }
  
  inline static void ggml_vec_add_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
@@ -673,7 +803,7 @@ index 3198b33..1440685 100644
          z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) / GGML_CPU_FP16_TO_FP32(y[i]));
      }
  }
-@@ -864,16 +971,52 @@ inline static void ggml_vec_scale_f16(const int n, ggml_fp16_t * y, const float
+@@ -864,16 +974,52 @@ inline static void ggml_vec_scale_f16(const int n, ggml_fp16_t * y, const float
  }
  
  inline static void ggml_vec_norm_f32 (const int n, float * s, const float * x) { ggml_vec_dot_f32(n, s, 0, x, 0, x, 0, 1); *s = sqrtf(*s);   }
@@ -730,7 +860,7 @@ index 3198b33..1440685 100644
          y[i] = GGML_CPU_FP32_TO_FP16(sqrtf(GGML_CPU_FP16_TO_FP32(x[i])));
      }
  }
-@@ -895,7 +1038,18 @@ inline static void ggml_vec_cos_f16 (const int n, ggml_fp16_t * y, const ggml_fp
+@@ -895,7 +1041,18 @@ inline static void ggml_vec_cos_f16 (const int n, ggml_fp16_t * y, const ggml_fp
          y[i] = GGML_CPU_FP32_TO_FP16(cosf(GGML_CPU_FP16_TO_FP32(x[i])));
      }
  }
@@ -750,7 +880,7 @@ index 3198b33..1440685 100644
  inline static void ggml_vec_abs_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
      for (int i = 0; i < n; ++i) {
          y[i] = GGML_CPU_FP32_TO_FP16(fabsf(GGML_CPU_FP16_TO_FP32(x[i])));
-@@ -1382,7 +1536,89 @@ inline static vfloat32m2_t ggml_v_silu_m2(vfloat32m2_t x, int vl) {
+@@ -1382,7 +1539,89 @@ inline static vfloat32m2_t ggml_v_silu_m2(vfloat32m2_t x, int vl) {
      return __riscv_vfdiv_vv_f32m2(x, one_plus_exp_neg_x, vl);
  }
  
