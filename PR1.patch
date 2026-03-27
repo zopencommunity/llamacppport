@@ -175,7 +175,7 @@ index 0587109..06d50e2 100644
  
  void ggml_backend_load_all_from_path(const char * dir_path) {
 diff --git a/ggml/src/ggml-cpu/CMakeLists.txt b/ggml/src/ggml-cpu/CMakeLists.txt
-index 1a1bbc9..e991d7d 100644
+index 1a1bbc9..be2211e 100644
 --- a/ggml/src/ggml-cpu/CMakeLists.txt
 +++ b/ggml/src/ggml-cpu/CMakeLists.txt
 @@ -56,7 +56,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
@@ -196,12 +196,15 @@ index 1a1bbc9..e991d7d 100644
  
      if (GGML_SYSTEM_ARCH STREQUAL "ARM")
          message(STATUS "ARM detected")
-@@ -552,6 +552,17 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+@@ -550,8 +550,18 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+         message(STATUS "Wasm detected")
+         list (APPEND GGML_CPU_SOURCES ggml-cpu/arch/wasm/quants.c)
      else()
-         message(WARNING "Unknown CPU architecture. Falling back to generic implementations.")
-         list(APPEND ARCH_FLAGS -DGGML_CPU_GENERIC)
+-        message(WARNING "Unknown CPU architecture. Falling back to generic implementations.")
+-        list(APPEND ARCH_FLAGS -DGGML_CPU_GENERIC)
++        message(WARNING "Unknown CPU architecture. Falling back to s390x/z/OS implementations.")
++	list(APPEND GGML_CPU_SOURCES ggml-cpu/arch/s390/quants.c)
 +	list(APPEND ARCH_DEFINITIONS GGML_VXE)
-+	message(STATUS "Added GGML_VXE Flag")
 +	if(NOT DEFINED TARGET_ARCH)
 +  	  set(TARGET_ARCH 13)
 +	endif()
@@ -214,6 +217,93 @@ index 1a1bbc9..e991d7d 100644
      endif()
  
      if (GGML_CPU_REPACK)
+diff --git a/ggml/src/ggml-cpu/arch-fallback.h b/ggml/src/ggml-cpu/arch-fallback.h
+index 41da829..d02ef66 100644
+--- a/ggml/src/ggml-cpu/arch-fallback.h
++++ b/ggml/src/ggml-cpu/arch-fallback.h
+@@ -236,9 +236,9 @@
+ #define ggml_gemm_mxfp4_8x8_q8_0_generic ggml_gemm_mxfp4_8x8_q8_0
+ #define ggml_gemm_q8_0_4x4_q8_0_generic ggml_gemm_q8_0_4x4_q8_0
+ #define ggml_gemm_q8_0_4x8_q8_0_generic ggml_gemm_q8_0_4x8_q8_0
+-#elif defined(__s390x__)
++#elif defined(__s390x__) || defined(__MVS__)
+ // quants.c
+-#define quantize_row_q8_K_generic quantize_row_q8_K
++// quantize_row_q8_K has a VXE2 implementation in arch/s390/quants.c
+ #define ggml_vec_dot_nvfp4_q8_0_generic ggml_vec_dot_nvfp4_q8_0
+ #define ggml_vec_dot_tq1_0_q8_K_generic ggml_vec_dot_tq1_0_q8_K
+ #define ggml_vec_dot_tq2_0_q8_K_generic ggml_vec_dot_tq2_0_q8_K
+diff --git a/ggml/src/ggml-cpu/arch/s390/quants.c b/ggml/src/ggml-cpu/arch/s390/quants.c
+index 34184ed..4005c60 100644
+--- a/ggml/src/ggml-cpu/arch/s390/quants.c
++++ b/ggml/src/ggml-cpu/arch/s390/quants.c
+@@ -144,6 +144,66 @@ void quantize_row_q8_1(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, i
+ }
+ 
+ 
++void quantize_row_q8_K(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, int64_t k) {
++    assert(k % QK_K == 0);
++    const int64_t nb = k / QK_K;
++
++    block_q8_K * GGML_RESTRICT y = vy;
++
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (int64_t i = 0; i < nb; i++) {
++        const float * src = x + i * QK_K;
++
++        // Find max and amax (scalar, matches reference behavior exactly)
++        float max = 0;
++        float amax = 0;
++        for (int j = 0; j < QK_K; ++j) {
++            float ax = fabsf(src[j]);
++            if (ax > amax) {
++                amax = ax; max = src[j];
++            }
++        }
++
++        if (!amax) {
++            y[i].d = 0;
++            memset(y[i].qs, 0, QK_K);
++            memset(y[i].bsums, 0, QK_K/16 * sizeof(int16_t));
++            continue;
++        }
++
++        const float iscale = -127.f / max;
++        y[i].d = 1.f / iscale;
++
++        const float32x4_t vscale = vec_splats(iscale);
++
++        // Quantize in groups of 16 and compute block sums
++        // QK_K/16 = 16 groups, each group = 4 vectors of 4 floats
++        for (int g = 0; g < QK_K/16; g++) {
++            int32x4_t acc = vec_splats(0);
++
++            for (int j = 0; j < 4; j++) {
++                const float32x4_t v = vec_mul(vec_xl(0, src + g*16 + 4*j), vscale);
++                const int32x4_t vi = vec_signed(__builtin_s390_vfisb(v, 4, 1));
++
++                y[i].qs[g*16 + 4*j + 0] = MIN(127, vec_extract(vi, 0));
++                y[i].qs[g*16 + 4*j + 1] = MIN(127, vec_extract(vi, 1));
++                y[i].qs[g*16 + 4*j + 2] = MIN(127, vec_extract(vi, 2));
++                y[i].qs[g*16 + 4*j + 3] = MIN(127, vec_extract(vi, 3));
++
++                acc = vec_add(acc, vi);
++            }
++
++            y[i].bsums[g] = vec_extract(acc, 0) + vec_extract(acc, 1) +
++                            vec_extract(acc, 2) + vec_extract(acc, 3);
++        }
++    }
++#else
++    GGML_UNUSED(nb);
++    // scalar
++    quantize_row_q8_K_ref(x, y, k);
++#endif
++}
++
+ //===================================== Dot products =================================
+ 
+ void ggml_vec_dot_q4_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
 diff --git a/ggml/src/ggml-cpu/ggml-cpu-impl.h b/ggml/src/ggml-cpu/ggml-cpu-impl.h
 index 88a9c9e..26439bc 100644
 --- a/ggml/src/ggml-cpu/ggml-cpu-impl.h
