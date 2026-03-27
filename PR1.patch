@@ -305,9 +305,26 @@ index 34184ed..4005c60 100644
  
  void ggml_vec_dot_q4_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
 diff --git a/ggml/src/ggml-cpu/ggml-cpu-impl.h b/ggml/src/ggml-cpu/ggml-cpu-impl.h
-index 88a9c9e..26439bc 100644
+index 88a9c9e..cc21b08 100644
 --- a/ggml/src/ggml-cpu/ggml-cpu-impl.h
 +++ b/ggml/src/ggml-cpu/ggml-cpu-impl.h
+@@ -62,14 +62,14 @@ struct ggml_compute_params {
+ #endif
+ #endif
+ 
+-#if defined(__s390x__) && defined(__VEC__)
++#if (defined(__s390x__) || defined(__MVS__)) && defined(__VEC__)
+ #ifndef __VXE__
+ #define __VXE__
+ #endif  // __VXE__
+ #ifndef __VXE2__
+ #define __VXE2__
+ #endif  // __VXE2__
+-#endif  // __s390x__ && __VEC__
++#endif  // (__s390x__ || __MVS__) && __VEC__
+ 
+ #if defined(__ARM_FEATURE_SVE) && defined(__linux__)
+ #include <sys/prctl.h>
 @@ -349,8 +349,9 @@ inline static int32x4_t ggml_vdotq_s32(int32x4_t acc, int8x16_t a, int8x16_t b)
  #endif
  
@@ -387,6 +404,28 @@ index ddf1737..576f63c 100644
  #else
      long pages = sysconf(_SC_PHYS_PAGES);
      long page_size = sysconf(_SC_PAGE_SIZE);
+diff --git a/ggml/src/ggml-cpu/ops.cpp b/ggml/src/ggml-cpu/ops.cpp
+index 3f85e53..710bca4 100644
+--- a/ggml/src/ggml-cpu/ops.cpp
++++ b/ggml/src/ggml-cpu/ops.cpp
+@@ -3737,7 +3737,16 @@ static void ggml_compute_forward_rms_norm_f32(
+                 const float * x = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
+ 
+                 ggml_float sum = 0.0;
+-                for (int64_t i00 = 0; i00 < ne00; i00++) {
++                int64_t i00 = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++                float32x4_t vsum = vec_splats(0.0f);
++                for (; i00 + 3 < ne00; i00 += 4) {
++                    float32x4_t vx = vec_xl(0, x + i00);
++                    vsum = vec_add(vsum, vec_mul(vx, vx));
++                }
++                sum = (ggml_float)vec_hsum_f32x4(vsum);
++#endif
++                for (; i00 < ne00; i00++) {
+                     sum += (ggml_float)(x[i00] * x[i00]);
+                 }
+ 
 diff --git a/ggml/src/ggml-cpu/ops.h b/ggml/src/ggml-cpu/ops.h
 index 3fa1443..2cdb4f6 100644
 --- a/ggml/src/ggml-cpu/ops.h
@@ -424,8 +463,47 @@ index bcad5a3..b2185f5 100644
  #include "common.h"
  
  #ifdef __cplusplus
+diff --git a/ggml/src/ggml-cpu/vec.cpp b/ggml/src/ggml-cpu/vec.cpp
+index d0e4001..8a10831 100644
+--- a/ggml/src/ggml-cpu/vec.cpp
++++ b/ggml/src/ggml-cpu/vec.cpp
+@@ -424,6 +424,10 @@ void ggml_vec_silu_f32(const int n, float * y, const float * x) {
+         vfloat32m2_t vy = ggml_v_silu_m2(vx, vl);
+         __riscv_vse32_v_f32m2(&y[i], vy, vl);
+     }
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        vec_xst(ggml_v_silu(vec_xl(0, x + i)), 0, y + i);
++    }
+ #endif
+     for (; i < n; ++i) {
+         y[i] = ggml_silu_f32(x[i]);
+@@ -462,6 +466,10 @@ void ggml_vec_swiglu_f32(const int n, float * y, const float * x, const float *
+         vfloat32m2_t vy = __riscv_vfmul_vv_f32m2(ggml_v_silu_m2(vx, vl), vg, vl);
+         __riscv_vse32_v_f32m2(&y[i], vy, vl);
+     }
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_mul(ggml_v_silu(vec_xl(0, x + i)), vec_xl(0, g + i)), 0, y + i);
++    }
+ #endif
+     for (; i < n; ++i) {
+         y[i] = ggml_silu_f32(x[i]) * g[i];
+@@ -606,6 +614,12 @@ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float
+         vsum = __riscv_vfwredusum_vs_f32m2_f64m1(val, vsum, avl);
+     }
+     return (ggml_float)__riscv_vfmv_f_s_f64m1_f64(vsum);
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t val = ggml_v_expf(vec_sub(vec_xl(0, x + i), vec_splats(max)));
++        vec_xst(val, 0, y + i);
++        sum += (ggml_float)vec_hsum_f32x4(val);
++    }
+ #endif
+     for (; i < n; ++i) {
+         float val = expf(x[i] - max);
 diff --git a/ggml/src/ggml-cpu/vec.h b/ggml/src/ggml-cpu/vec.h
-index 3198b33..9a7b49c 100644
+index 3198b33..1440685 100644
 --- a/ggml/src/ggml-cpu/vec.h
 +++ b/ggml/src/ggml-cpu/vec.h
 @@ -1,4 +1,5 @@
@@ -672,6 +750,97 @@ index 3198b33..9a7b49c 100644
  inline static void ggml_vec_abs_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
      for (int i = 0; i < n; ++i) {
          y[i] = GGML_CPU_FP32_TO_FP16(fabsf(GGML_CPU_FP16_TO_FP32(x[i])));
+@@ -1382,7 +1536,89 @@ inline static vfloat32m2_t ggml_v_silu_m2(vfloat32m2_t x, int vl) {
+     return __riscv_vfdiv_vv_f32m2(x, one_plus_exp_neg_x, vl);
+ }
+ 
+-#endif // __ARM_NEON / __AVX2__ / __SSE2__ / __riscv_v_intrinsic
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++
++// Helper: reinterpret float32x4_t as uint32x4_t and vice versa
++inline static uint32x4_t vxe_reinterpret_u32_f32(float32x4_t v) {
++    uint32x4_t r;
++    __builtin_memcpy(&r, &v, sizeof(r));
++    return r;
++}
++
++inline static float32x4_t vxe_reinterpret_f32_u32(uint32x4_t v) {
++    float32x4_t r;
++    __builtin_memcpy(&r, &v, sizeof(r));
++    return r;
++}
++
++inline static int32x4_t vxe_reinterpret_i32_f32(float32x4_t v) {
++    int32x4_t r;
++    __builtin_memcpy(&r, &v, sizeof(r));
++    return r;
++}
++
++// adapted from arm limited optimized routine
++// the maximum error is 1.45358 plus 0.5 ulps
++// numbers above 88.38 will flush to infinity
++// numbers beneath -103.97 will flush to zero
++inline static float32x4_t ggml_v_expf(float32x4_t x) {
++    const float32x4_t r = vec_splats(0x1.8p23f);
++    // z = x * log2(e) + r  (no FMA, so mul+add)
++    const float32x4_t z = vec_add(vec_mul(x, vec_splats(0x1.715476p+0f)), r);
++    const float32x4_t n = vec_sub(z, r);
++    // b = x - n*ln2_hi - n*ln2_lo
++    const float32x4_t b = vec_sub(vec_sub(x, vec_mul(n, vec_splats(0x1.62e4p-1f))),
++                                  vec_mul(n, vec_splats(0x1.7f7d1cp-20f)));
++
++    const uint32x4_t e = vec_sl(vxe_reinterpret_u32_f32(z), (uint32x4_t){23,23,23,23});
++    const float32x4_t k = vxe_reinterpret_f32_u32(vec_add(e, vxe_reinterpret_u32_f32(vec_splats(1.0f))));
++
++    const float32x4_t abs_n = vec_abs(n);
++    const uint32x4_t c = (uint32x4_t)vec_cmpgt(abs_n, vec_splats(126.0f));
++
++    const float32x4_t u = vec_mul(b, b);
++    // Polynomial: j = 0x1.ffffecp-1 * b + (0x1.fffdb6p-2 + 0x1.555e66p-3*b + (0x1.573e2ep-5 + 0x1.0e4020p-7*b)*u)*u
++    const float32x4_t j = vec_add(
++        vec_mul(vec_splats(0x1.ffffecp-1f), b),
++        vec_mul(vec_add(
++            vec_add(vec_splats(0x1.fffdb6p-2f), vec_mul(vec_splats(0x1.555e66p-3f), b)),
++            vec_mul(vec_add(vec_splats(0x1.573e2ep-5f), vec_mul(vec_splats(0x1.0e4020p-7f), b)), u)
++        ), u));
++
++    // Fast path: if all |n| <= 126
++    if (!(c[0] | c[1] | c[2] | c[3])) {
++        return vec_add(k, vec_mul(j, k));  // k + j*k = k*(1+j)
++    }
++
++    // Slow path for overflow/underflow
++    const uint32x4_t neg_mask = (uint32x4_t)vec_cmple(n, vec_splats(0.0f));
++    const uint32x4_t d = vec_and(neg_mask, (uint32x4_t){0x82000000u, 0x82000000u, 0x82000000u, 0x82000000u});
++    const float32x4_t s1 = vxe_reinterpret_f32_u32(vec_add(d, (uint32x4_t){0x7f000000u, 0x7f000000u, 0x7f000000u, 0x7f000000u}));
++    const float32x4_t s2 = vxe_reinterpret_f32_u32(vec_sub(e, d));
++
++    const uint32x4_t d2 = (uint32x4_t)vec_cmpgt(abs_n, vec_splats(192.0f));
++    // result = d2 ? s1*s1 : (c ? (s2 + s2*j)*s1 : k + k*j)
++    const float32x4_t overflow   = vec_mul(s1, s1);
++    const float32x4_t big_result = vec_mul(vec_add(s2, vec_mul(s2, j)), s1);
++    const float32x4_t normal     = vec_add(k, vec_mul(k, j));
++
++    // Select: c ? big_result : normal
++    const float32x4_t r1 = vec_sel(normal, big_result, c);
++    // Select: d2 ? overflow : r1
++    return vec_sel(r1, overflow, d2);
++}
++
++// computes silu x/(1+exp(-x)) in single precision vector
++inline static float32x4_t ggml_v_silu(float32x4_t x) {
++    const float32x4_t one = vec_splats(1.0f);
++    const float32x4_t zero = vec_splats(0.0f);
++    const float32x4_t neg_x = vec_sub(zero, x);
++    const float32x4_t exp_neg_x = ggml_v_expf(neg_x);
++    const float32x4_t one_plus_exp_neg_x = vec_add(one, exp_neg_x);
++    return vec_div(x, one_plus_exp_neg_x);
++}
++
++#endif // __ARM_NEON / __AVX2__ / __SSE2__ / __riscv_v_intrinsic / __VXE__
+ 
+ inline static void ggml_vec_silu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+     for (int i = 0; i < n; ++i) {
 diff --git a/ggml/src/ggml-impl.h b/ggml/src/ggml-impl.h
 index 9256865..8b68014 100644
 --- a/ggml/src/ggml-impl.h
