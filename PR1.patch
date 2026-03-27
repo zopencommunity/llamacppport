@@ -1,0 +1,1957 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+index c6a2dcb..6558b31 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -42,6 +42,8 @@
+ #   endif
+ #elif defined(_AIX)
+ #include <sys/limits.h>
++#elif defined(__MVS__)
++#include <limits.h>
+ #else
+ #include <sys/syslimits.h>
+ #endif
+diff --git a/common/common.cpp b/common/common.cpp
+index 59d75a3..448a3b4 100644
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -852,7 +852,7 @@ std::string fs_get_cache_directory() {
+         cache_directory = std::getenv("LLAMA_CACHE");
+     } else {
+ #if defined(__linux__) || defined(__FreeBSD__) || defined(_AIX) || \
+-        defined(__OpenBSD__) || defined(__NetBSD__)
++        defined(__OpenBSD__) || defined(__NetBSD__) || defined(__MVS__)
+         if (std::getenv("XDG_CACHE_HOME")) {
+             cache_directory = std::getenv("XDG_CACHE_HOME");
+         } else if (std::getenv("HOME")) {
+@@ -1579,6 +1579,7 @@ static common_control_vector_data common_control_vector_load_one(const common_co
+     struct gguf_init_params meta_gguf_params = {
+         /* .no_alloc = */ false,
+         /* .ctx      = */ &ctx,
++	/* .allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
+     if (!ctx_gguf) {
+diff --git a/common/download.cpp b/common/download.cpp
+index 5ef60a4..f53ac67 100644
+--- a/common/download.cpp
++++ b/common/download.cpp
+@@ -18,6 +18,9 @@
+ #include <string>
+ #include <thread>
+ #include <vector>
++#ifdef __MVS__
++#include <cstdlib>
++#endif
+ 
+ #include "http.h"
+ 
+@@ -30,6 +33,8 @@
+ #   endif
+ #elif defined(_AIX)
+ #include <sys/limits.h>
++#elif defined(__MVS__)
++#include <limits.h>
+ #else
+ #include <sys/syslimits.h>
+ #endif
+@@ -508,6 +513,7 @@ bool common_download_model(const common_params_model & model,
+         struct gguf_init_params gguf_params = {
+             /*.no_alloc = */ true,
+             /*.ctx      = */ NULL,
++            /*.allow_byteswapping = */ true,
+         };
+         auto * ctx_gguf = gguf_init_from_file(model.path.c_str(), gguf_params);
+         if (!ctx_gguf) {
+diff --git a/common/http.h b/common/http.h
+index d3daccd..9c181c7 100644
+--- a/common/http.h
++++ b/common/http.h
+@@ -85,6 +85,12 @@ static std::pair<httplib::Client, common_http_url> common_http_client(const std:
+ 
+     httplib::Client cli(parts.scheme + "://" + parts.host + ":" + std::to_string(parts.port));
+ 
++#ifdef __MVS__
++    if (std::getenv("SSL_CERT_PATH")) {
++        cli.set_ca_cert_path(std::getenv("SSL_CERT_PATH"));
++    }
++#endif
++
+     if (!parts.user.empty()) {
+         cli.set_basic_auth(parts.user, parts.password);
+     }
+diff --git a/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp b/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
+index 702bc74..ae4cb5e 100644
+--- a/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
++++ b/examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp
+@@ -537,6 +537,7 @@ static void load_vocab(const char * filename, const Config * config, struct my_l
+         struct gguf_init_params params = {
+             /*.no_alloc = */ false,
+             /*.ctx      = */ &ctx_data,
++	    /*.allow_byteswapping = */ true,
+         };
+ 
+         struct gguf_context * ctx = gguf_init_from_file(filename, params);
+diff --git a/examples/gguf-hash/gguf-hash.cpp b/examples/gguf-hash/gguf-hash.cpp
+index 331de30..d754f4b 100644
+--- a/examples/gguf-hash/gguf-hash.cpp
++++ b/examples/gguf-hash/gguf-hash.cpp
+@@ -291,6 +291,7 @@ static hash_exit_code_t gguf_hash(const hash_params & hash_params) {
+     struct gguf_init_params params = {
+         /*.no_alloc = */ false,
+         /*.ctx      = */ &ctx_data,
++	/*.allow_byteswapping = */ true,
+     };
+ 
+     // xxh64 init
+diff --git a/examples/gguf/gguf.cpp b/examples/gguf/gguf.cpp
+index 79ad387..985264f 100644
+--- a/examples/gguf/gguf.cpp
++++ b/examples/gguf/gguf.cpp
+@@ -88,6 +88,7 @@ static bool gguf_ex_read_0(const std::string & fname) {
+     struct gguf_init_params params = {
+         /*.no_alloc = */ false,
+         /*.ctx      = */ NULL,
++	/*.allow_byteswapping = */ true,
+     };
+ 
+     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
+diff --git a/ggml/include/ggml.h b/ggml/include/ggml.h
+index 669f66b..84f2175 100644
+--- a/ggml/include/ggml.h
++++ b/ggml/include/ggml.h
+@@ -2721,6 +2721,7 @@ extern "C" {
+ #endif
+     typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k);
+     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k);
++    typedef void (*ggml_byteswap_t) (void * GGML_RESTRICT buffer, size_t elements);
+ 
+     struct ggml_type_traits {
+         const char             * type_name;
+@@ -2730,6 +2731,7 @@ extern "C" {
+         bool                     is_quantized;
+         ggml_to_float_t          to_float;
+         ggml_from_float_t        from_float_ref;
++	ggml_byteswap_t 	 byteswap;
+     };
+ 
+     GGML_API const struct ggml_type_traits * ggml_get_type_traits(enum ggml_type type);
+diff --git a/ggml/include/gguf.h b/ggml/include/gguf.h
+index 79ee202..236205c 100644
+--- a/ggml/include/gguf.h
++++ b/ggml/include/gguf.h
+@@ -74,6 +74,8 @@ extern "C" {
+ 
+         // if not NULL, create a ggml_context and allocate the tensor data in it
+         struct ggml_context ** ctx;
++
++	bool allow_byteswapping;
+     };
+ 
+     GGML_API struct gguf_context * gguf_init_empty(void);
+@@ -197,6 +199,9 @@ extern "C" {
+     // writes the meta data to pointer "data"
+     GGML_API void   gguf_get_meta_data(const struct gguf_context * ctx, void * data);
+ 
++    // returns true if gguf file needs byteswapping when reading. Byteswapping for writing not implemented
++    GGML_API bool gguf_needs_byteswap(const struct gguf_context * ctx);
++
+ #ifdef  __cplusplus
+ }
+ #endif
+diff --git a/ggml/src/ggml-backend-reg.cpp b/ggml/src/ggml-backend-reg.cpp
+index 0587109..06d50e2 100644
+--- a/ggml/src/ggml-backend-reg.cpp
++++ b/ggml/src/ggml-backend-reg.cpp
+@@ -541,7 +541,9 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
+ }
+ 
+ void ggml_backend_load_all() {
+-    ggml_backend_load_all_from_path(nullptr);
++#ifdef GGML_BACKEND_DL
++     ggml_backend_load_all_from_path(nullptr);
++#endif
+ }
+ 
+ void ggml_backend_load_all_from_path(const char * dir_path) {
+diff --git a/ggml/src/ggml-cpu/CMakeLists.txt b/ggml/src/ggml-cpu/CMakeLists.txt
+index 1a1bbc9..e991d7d 100644
+--- a/ggml/src/ggml-cpu/CMakeLists.txt
++++ b/ggml/src/ggml-cpu/CMakeLists.txt
+@@ -56,7 +56,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+ 
+     target_compile_features(${GGML_CPU_NAME} PRIVATE c_std_11 cxx_std_17)
+     target_include_directories(${GGML_CPU_NAME} PRIVATE . ggml-cpu)
+-
++    list(APPEND ARCH_FLAGS -fzvector -m64 -march=z15)
+     if (APPLE AND GGML_ACCELERATE)
+         find_library(ACCELERATE_FRAMEWORK Accelerate)
+         if (ACCELERATE_FRAMEWORK)
+@@ -101,7 +101,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+         target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_CPU_HBM)
+ 
+         target_link_libraries(${GGML_CPU_NAME} PUBLIC memkind)
+-    endif()
++   endif()
+ 
+     if (GGML_SYSTEM_ARCH STREQUAL "ARM")
+         message(STATUS "ARM detected")
+@@ -552,6 +552,17 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+     else()
+         message(WARNING "Unknown CPU architecture. Falling back to generic implementations.")
+         list(APPEND ARCH_FLAGS -DGGML_CPU_GENERIC)
++	list(APPEND ARCH_DEFINITIONS GGML_VXE)
++	message(STATUS "Added GGML_VXE Flag")
++	if(NOT DEFINED TARGET_ARCH)
++  	  set(TARGET_ARCH 13)
++	endif()
++	if(TARGET_ARCH GREATER 13)
++  	  target_compile_options(${GGML_CPU_NAME} PRIVATE "-qarch=${TARGET_ARCH}")
++	endif()
++	target_include_directories(${GGML_CPU_NAME} PRIVATE /usr/include)
++	target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
++	message(STATUS "Found MASS: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
+     endif()
+ 
+     if (GGML_CPU_REPACK)
+diff --git a/ggml/src/ggml-cpu/ggml-cpu-impl.h b/ggml/src/ggml-cpu/ggml-cpu-impl.h
+index 88a9c9e..26439bc 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu-impl.h
++++ b/ggml/src/ggml-cpu/ggml-cpu-impl.h
+@@ -349,8 +349,9 @@ inline static int32x4_t ggml_vdotq_s32(int32x4_t acc, int8x16_t a, int8x16_t b)
+ #endif
+ 
+ #if defined(__VXE__) || defined(__VXE2__)
++#ifndef __VEC__
+ #include <vecintrin.h>
+-
++#endif
+ #define vec_neg(a)    (-(a))                // Vector Negate
+ #define vec_add(a, b) ((a) + (b))           // Vector Add
+ #define vec_sub(a, b) ((a) - (b))           // Vector Subtract
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.c b/ggml/src/ggml-cpu/ggml-cpu.c
+index 8b323bd..0c9299b 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -17,7 +17,7 @@
+ 
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+ #include <malloc.h> // using malloc.h with MSC/MINGW
+-#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
++#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__MVS__)
+ #include <alloca.h>
+ #endif
+ 
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.cpp b/ggml/src/ggml-cpu/ggml-cpu.cpp
+index ddf1737..576f63c 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.cpp
++++ b/ggml/src/ggml-cpu/ggml-cpu.cpp
+@@ -37,6 +37,40 @@
+ #    include <sys/types.h>
+ #endif
+ 
++#ifdef __MVS__
++#define CVT_PTR 	0x10
++#define CVTRCEP_OFFSET 	0x490
++#define RCEAFC_OFFSET 	0x088
++
++typedef unsigned data_area_ptr_assign_type;
++
++typedef union {
++    struct {
++#if defined(_LP64)
++        data_area_ptr_assign_type lower;
++#endif
++	data_area_ptr_assign_type assign;
++    };
++    char* deref;
++} data_area_ptr;
++
++uint64_t get_free_memory(void) {
++    uint64_t freeram;
++    data_area_ptr cvt = {0};
++    data_area_ptr rcep = {0};
++    cvt.assign = *(data_area_ptr_assign_type*)(CVT_PTR);
++    rcep.assign = *(data_area_ptr_assign_type*)(cvt.deref + CVTRCEP_OFFSET);
++    freeram = (uint64_t)*((uint32_t*)(rcep.deref + RCEAFC_OFFSET)) * 4096;
++
++    return freeram;
++}
++
++uint64_t get_total_memory(void) {
++    /* Use CVTRLSTG to get the size of actual real storage online at IPL in K. */
++    return (uint64_t)((int)((char *__ptr32 *__ptr32 *)0)[4][214]) * 1024;
++}
++#endif
++
+ // ggml-backend interface
+ 
+ std::vector<ggml_backend_buffer_type_t> & ggml_backend_cpu_get_extra_buffer_types() {
+@@ -367,6 +401,9 @@ static void ggml_backend_cpu_device_get_memory(ggml_backend_dev_t dev, size_t *
+     GlobalMemoryStatusEx(&status);
+     *total = status.ullTotalPhys;
+     *free = status.ullAvailPhys;
++#elifdef __MVS__
++    *total = get_total_memory();
++    *free = get_free_memory();
+ #else
+     long pages = sysconf(_SC_PHYS_PAGES);
+     long page_size = sysconf(_SC_PAGE_SIZE);
+diff --git a/ggml/src/ggml-cpu/ops.h b/ggml/src/ggml-cpu/ops.h
+index 3fa1443..2cdb4f6 100644
+--- a/ggml/src/ggml-cpu/ops.h
++++ b/ggml/src/ggml-cpu/ops.h
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include <mass.h>
++
+ #include "ggml.h"
+ 
+ //
+diff --git a/ggml/src/ggml-cpu/simd-mappings.h b/ggml/src/ggml-cpu/simd-mappings.h
+index 0deda93..37b72ca 100644
+--- a/ggml/src/ggml-cpu/simd-mappings.h
++++ b/ggml/src/ggml-cpu/simd-mappings.h
+@@ -1166,7 +1166,7 @@ static inline void __lsx_f16x4_store(ggml_fp16_t * x, __m128 y) {
+ #define GGML_F16_VEC_MUL             GGML_F32Cx4_MUL
+ #define GGML_F16_VEC_REDUCE          GGML_F32Cx4_REDUCE
+ 
+-#elif defined(__VXE__) || defined(__VXE2__)
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
+ 
+ #define GGML_SIMD
+ 
+diff --git a/ggml/src/ggml-cpu/unary-ops.h b/ggml/src/ggml-cpu/unary-ops.h
+index bcad5a3..b2185f5 100644
+--- a/ggml/src/ggml-cpu/unary-ops.h
++++ b/ggml/src/ggml-cpu/unary-ops.h
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include <mass.h>
++
+ #include "common.h"
+ 
+ #ifdef __cplusplus
+diff --git a/ggml/src/ggml-cpu/vec.h b/ggml/src/ggml-cpu/vec.h
+index 3198b33..9a7b49c 100644
+--- a/ggml/src/ggml-cpu/vec.h
++++ b/ggml/src/ggml-cpu/vec.h
+@@ -1,4 +1,5 @@
+ // Vectorized functions for fundamental operations
++#include <mass.h>
+ 
+ #pragma once
+ 
+@@ -66,6 +67,12 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
+         __m256 vz = _mm256_add_ps(vx, vy);
+         _mm256_storeu_ps(z + i, vz);
+     }
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        float32x4_t vy = vec_xl(0, y + i);
++        vec_xst(vec_add(vx, vy), 0, z + i);
++    }
+ #endif
+     for (; i < n; ++i) {
+         z[i] = x[i] + y[i];
+@@ -73,37 +80,137 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
+ }
+ 
+ inline static void ggml_vec_add_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        float32x4_t vy = __lzs_f16cx4_load(y + i);
++        __lzs_f16cx4_store(z + i, vec_add(vx, vy));
++    }
++#endif
++    for (; i < n; ++i) {
+         z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) + GGML_CPU_FP16_TO_FP32(y[i]));
+     }
+ }
+ inline static void ggml_vec_add1_f32(const int n, float * z, const float * x, const float   v) { for (int i = 0; i < n; ++i) z[i]  = x[i] + v;    }
+-inline static void ggml_vec_acc_f32 (const int n, float * y, const float * x)                  { for (int i = 0; i < n; ++i) y[i] += x[i];        }
++inline static void ggml_vec_acc_f32 (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vy = vec_xl(0, y + i);
++        float32x4_t vx = vec_xl(0, x + i);
++        vec_xst(vec_add(vy, vx), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] += x[i];
++    }
++}
+ inline static void ggml_vec_acc1_f32(const int n, float * y, const float   v)                  { for (int i = 0; i < n; ++i) y[i] += v;           }
+-inline static void ggml_vec_sub_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i] - y[i]; }
++inline static void ggml_vec_sub_f32 (const int n, float * z, const float * x, const float * y) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        float32x4_t vy = vec_xl(0, y + i);
++        vec_xst(vec_sub(vx, vy), 0, z + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        z[i] = x[i] - y[i];
++    }
++}
+ inline static void ggml_vec_sub_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        float32x4_t vy = __lzs_f16cx4_load(y + i);
++        __lzs_f16cx4_store(z + i, vec_sub(vx, vy));
++    }
++#endif
++    for (; i < n; ++i) {
+         z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) - GGML_CPU_FP16_TO_FP32(y[i]));
+     }
+ }
+ inline static void ggml_vec_set_f32 (const int n, float * x, const float   v)                  { for (int i = 0; i < n; ++i) x[i]  = v;           }
+ inline static void ggml_vec_cpy_f32 (const int n, float * y, const float * x)                  { for (int i = 0; i < n; ++i) y[i]  = x[i];        }
+-inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)                  { for (int i = 0; i < n; ++i) y[i]  = -x[i];       }
++inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    const float32x4_t vzero = vec_splats(0.0f);
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        vec_xst(vec_sub(vzero, vx), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] = -x[i];
++    }
++}
+ inline static void ggml_vec_neg_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    const float32x4_t vzero = vec_splats(0.0f);
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        __lzs_f16cx4_store(y + i, vec_sub(vzero, vx));
++    }
++#endif
++    for (; i < n; ++i) {
+         y[i] = GGML_CPU_FP32_TO_FP16(-GGML_CPU_FP16_TO_FP32(x[i]));
+     }
+ }
+ 
+-inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];   }
++inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        float32x4_t vy = vec_xl(0, y + i);
++        vec_xst(vec_mul(vx, vy), 0, z + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        z[i] = x[i]*y[i];
++    }
++}
+ inline static void ggml_vec_mul_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        float32x4_t vy = __lzs_f16cx4_load(y + i);
++        __lzs_f16cx4_store(z + i, vec_mul(vx, vy));
++    }
++#endif
++    for (; i < n; ++i) {
+         z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) * GGML_CPU_FP16_TO_FP32(y[i]));
+     }
+ }
+-inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];   }
++inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        float32x4_t vy = vec_xl(0, y + i);
++        vec_xst(vec_div(vx, vy), 0, z + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        z[i] = x[i]/y[i];
++    }
++}
+ inline static void ggml_vec_div_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        float32x4_t vy = __lzs_f16cx4_load(y + i);
++        __lzs_f16cx4_store(z + i, vec_div(vx, vy));
++    }
++#endif
++    for (; i < n; ++i) {
+         z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) / GGML_CPU_FP16_TO_FP32(y[i]));
+     }
+ }
+@@ -864,16 +971,52 @@ inline static void ggml_vec_scale_f16(const int n, ggml_fp16_t * y, const float
+ }
+ 
+ inline static void ggml_vec_norm_f32 (const int n, float * s, const float * x) { ggml_vec_dot_f32(n, s, 0, x, 0, x, 0, 1); *s = sqrtf(*s);   }
+-inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = x[i]*x[i];   }
++inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        vec_xst(vec_mul(vx, vx), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] = x[i]*x[i];
++    }
++}
+ inline static void ggml_vec_sqr_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        __lzs_f16cx4_store(y + i, vec_mul(vx, vx));
++    }
++#endif
++    for (; i < n; ++i) {
+         float v = GGML_CPU_FP16_TO_FP32(x[i]);
+         y[i] = GGML_CPU_FP32_TO_FP16(v*v);
+     }
+ }
+-inline static void ggml_vec_sqrt_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = sqrtf(x[i]); }
++inline static void ggml_vec_sqrt_f32 (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        vec_xst(vec_sqrt(vx), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] = sqrtf(x[i]);
++    }
++}
+ inline static void ggml_vec_sqrt_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        __lzs_f16cx4_store(y + i, vec_sqrt(vx));
++    }
++#endif
++    for (; i < n; ++i) {
+         y[i] = GGML_CPU_FP32_TO_FP16(sqrtf(GGML_CPU_FP16_TO_FP32(x[i])));
+     }
+ }
+@@ -895,7 +1038,18 @@ inline static void ggml_vec_cos_f16 (const int n, ggml_fp16_t * y, const ggml_fp
+         y[i] = GGML_CPU_FP32_TO_FP16(cosf(GGML_CPU_FP16_TO_FP32(x[i])));
+     }
+ }
+-inline static void ggml_vec_abs_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = fabsf(x[i]); }
++inline static void ggml_vec_abs_f32  (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        vec_xst(vec_abs(vx), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] = fabsf(x[i]);
++    }
++}
+ inline static void ggml_vec_abs_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+     for (int i = 0; i < n; ++i) {
+         y[i] = GGML_CPU_FP32_TO_FP16(fabsf(GGML_CPU_FP16_TO_FP32(x[i])));
+diff --git a/ggml/src/ggml-impl.h b/ggml/src/ggml-impl.h
+index 9256865..8b68014 100644
+--- a/ggml/src/ggml-impl.h
++++ b/ggml/src/ggml-impl.h
+@@ -21,9 +21,21 @@
+ //
+ //   $ ln -sfn /Library/Developer/CommandLineTools/usr/lib/clang/13.1.6/include/arm_neon.h ./src/
+ //
+-#include <arm_neon.h>
++#include <immintrin.h>
+ #endif
+ 
++#if defined(__gnu_linux__)
++#include <byteswap.h>
++#elif defined(__MVS__)
++#define bswap_16(x) __builtin_bswap16(x)
++#define bswap_32(x) __builtin_bswap32(x)
++#define bswap_64(x) __builtin_bswap64(x)
++#else
++#define bswap_16(x) (x)
++#define bswap_32(x) (x)
++#define bswap_64(x) (x)
++#endif // defined(__gnu_linux__)
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -620,6 +632,18 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
+ #define GGML_FP32_TO_BF16(x) ggml_compute_fp32_to_bf16(x)
+ #define GGML_BF16_TO_FP32(x) ggml_compute_bf16_to_fp32(x)
+ 
++static inline void ggml_bswap16(void * value) {
++    *((uint16_t*)value) = bswap_16(*((uint16_t*)value));
++}
++
++static inline void ggml_bswap32(void * value) {
++    *((uint32_t*)value) = bswap_32(*((uint32_t*)value));
++}
++
++static inline void ggml_bswap64(void * value) {
++    *((uint64_t*)value) = bswap_64(*((uint64_t*)value));
++}
++
+ static inline int32_t ggml_node_get_use_count(const struct ggml_cgraph * cgraph, int node_idx) {
+     const struct ggml_tensor * node = cgraph->nodes[node_idx];
+ 
+@@ -743,6 +767,31 @@ static inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph * cgraph,
+ #include <array>
+ #include <initializer_list>
+ #include <vector>
++#include <type_traits>
++
++template <typename T, std::enable_if_t<sizeof(T) == 1, int> = 0>
++static inline void ggml_bswap(T * value)
++{
++    GGML_UNUSED(value);
++}
++
++template <typename T, std::enable_if_t<sizeof(T) == 2, int> = 0>
++static inline void ggml_bswap(T * value)
++{
++    ggml_bswap16(value);
++}
++
++template <typename T, std::enable_if_t<sizeof(T) == 4, int> = 0>
++static inline void ggml_bswap(T * value)
++{
++    ggml_bswap32(value);
++}
++
++template <typename T, std::enable_if_t<sizeof(T) == 8, int> = 0>
++static inline void ggml_bswap(T * value)
++{
++    ggml_bswap64(value);
++}
+ 
+ // nicer C++ syntax for ggml_can_fuse
+ inline bool ggml_can_fuse(const struct ggml_cgraph * cgraph, int node_idx, std::initializer_list<enum ggml_op> ops) {
+diff --git a/ggml/src/ggml.c b/ggml/src/ggml.c
+index 4c0764a..5e25655 100644
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -14,9 +14,13 @@
+ #include <hbwmalloc.h>
+ #endif
+ 
++#if defined(__MVS__)
++#include <zos-base.h>
++#endif
++
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+ #include <malloc.h> // using malloc.h with MSC/MINGW
+-#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
++#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__MVS__)
+ #include <alloca.h>
+ #endif
+ 
+@@ -322,6 +326,15 @@ void * ggml_aligned_malloc(size_t size) {
+ 
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+     return _aligned_malloc(size, alignment);
++#elif defined(__MVS__)
++//    void * aligned_memory = NULL;
++//    if (size ==0)
++//	    size = 1;
++//    aligned_memory = malloc(size);
++//    int result = 0;
++//    if (aligned_memory == NULL)
++//	    result = errno;
++    return __aligned_malloc(size, alignment);
+ #else
+     if (size == 0) {
+         GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
+@@ -373,6 +386,8 @@ void ggml_aligned_free(void * ptr, size_t size) {
+     GGML_UNUSED(size);
+ #if defined(_MSC_VER) || defined(__MINGW32__)
+     _aligned_free(ptr);
++#elif defined(__MVS__)
++    __aligned_free(ptr);
+ #elif GGML_USE_CPU_HBM
+     if (ptr != NULL) {
+         hbw_free(ptr);
+@@ -606,6 +621,35 @@ FILE * ggml_fopen(const char * fname, const char * mode) {
+ 
+ }
+ 
++static void ggml_byteswap_i16 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_i32 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_i64 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_0 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_1 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q5_0 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q5_1	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q8_0	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q8_1	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q2_k	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q3_k 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_k 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q5_k 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q6_k	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq2_xxs (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq2_xs  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq3_xxs (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq3_s   (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq2_s   (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq1_s   (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq4_nl  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_iq4_xs  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q8_k 	  (void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_0_4x4(void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_0_4x8(void * restrict buffer, size_t elements);
++static void ggml_byteswap_q4_0_8x8(void * restrict buffer, size_t elements);
++static void ggml_byteswap_tq1_0   (void * restrict buffer, size_t elements);
++static void ggml_byteswap_tq2_0   (void * restrict buffer, size_t elements);
++
+ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+     [GGML_TYPE_I8] = {
+         .type_name                = "i8",
+@@ -618,30 +662,35 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .blck_size                = 1,
+         .type_size                = sizeof(int16_t),
+         .is_quantized             = false,
++	.byteswap		  = ggml_byteswap_i16,
+     },
+     [GGML_TYPE_I32] = {
+         .type_name                = "i32",
+         .blck_size                = 1,
+         .type_size                = sizeof(int32_t),
+         .is_quantized             = false,
++	.byteswap		  = ggml_byteswap_i32,
+     },
+     [GGML_TYPE_I64] = {
+         .type_name                = "i64",
+         .blck_size                = 1,
+         .type_size                = sizeof(int64_t),
+         .is_quantized             = false,
++	.byteswap		  = ggml_byteswap_i64,
+     },
+     [GGML_TYPE_F64] = {
+         .type_name                = "f64",
+         .blck_size                = 1,
+         .type_size                = sizeof(double),
+         .is_quantized             = false,
++	.byteswap		  = ggml_byteswap_i64,
+     },
+     [GGML_TYPE_F32] = {
+         .type_name                = "f32",
+         .blck_size                = 1,
+         .type_size                = sizeof(float),
+         .is_quantized             = false,
++	.byteswap		  = ggml_byteswap_i32,
+     },
+     [GGML_TYPE_F16] = {
+         .type_name                = "f16",
+@@ -650,6 +699,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = false,
+         .to_float                 = (ggml_to_float_t) ggml_fp16_to_fp32_row,
+         .from_float_ref           = (ggml_from_float_t) ggml_fp32_to_fp16_row,
++	.byteswap		  = ggml_byteswap_i16,
+     },
+     [GGML_TYPE_Q4_0] = {
+         .type_name                = "q4_0",
+@@ -658,6 +708,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q4_0,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q4_0_ref,
++	.byteswap		  = ggml_byteswap_q4_0,
+     },
+     [GGML_TYPE_Q4_1] = {
+         .type_name                = "q4_1",
+@@ -666,6 +717,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q4_1,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q4_1_ref,
++	.byteswap		  = ggml_byteswap_q4_1,
+     },
+     [4] = { // GGML_TYPE_Q4_2
+         .type_name                = "DEPRECATED",
+@@ -686,6 +738,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q5_0,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q5_0_ref,
++	.byteswap		  = ggml_byteswap_q5_0,
+     },
+     [GGML_TYPE_Q5_1] = {
+         .type_name                = "q5_1",
+@@ -694,6 +747,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q5_1,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q5_1_ref,
++	.byteswap		  = ggml_byteswap_q5_1,
+     },
+     [GGML_TYPE_Q8_0] = {
+         .type_name                = "q8_0",
+@@ -702,6 +756,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q8_0,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q8_0_ref,
++	.byteswap		  = ggml_byteswap_q8_0,
+     },
+     [GGML_TYPE_Q8_1] = {
+         .type_name                = "q8_1",
+@@ -709,6 +764,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .type_size                = sizeof(block_q8_1),
+         .is_quantized             = true,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q8_1_ref,
++	.byteswap		  = ggml_byteswap_q8_1,
+     },
+     [GGML_TYPE_MXFP4] = {
+         .type_name                = "mxfp4",
+@@ -733,6 +789,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q2_K,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q2_K_ref,
++	.byteswap		  = ggml_byteswap_q2_k,
+     },
+     [GGML_TYPE_Q3_K] = {
+         .type_name                = "q3_K",
+@@ -741,6 +798,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q3_K,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q3_K_ref,
++	.byteswap		  = ggml_byteswap_q3_k,
+     },
+     [GGML_TYPE_Q4_K] = {
+         .type_name                = "q4_K",
+@@ -749,6 +807,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q4_K,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q4_K_ref,
++	.byteswap		  = ggml_byteswap_q4_k,
+     },
+     [GGML_TYPE_Q5_K] = {
+         .type_name                = "q5_K",
+@@ -757,6 +816,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q5_K,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q5_K_ref,
++	.byteswap		  = ggml_byteswap_q5_k,
+     },
+     [GGML_TYPE_Q6_K] = {
+         .type_name                = "q6_K",
+@@ -765,6 +825,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_q6_K,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_q6_K_ref,
++	.byteswap		  = ggml_byteswap_q6_k,
+     },
+     [GGML_TYPE_IQ2_XXS] = {
+         .type_name                = "iq2_xxs",
+@@ -773,6 +834,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_iq2_xxs,
+         .from_float_ref           = NULL,
++	.byteswap		  = ggml_byteswap_iq2_xxs,
+     },
+     [GGML_TYPE_IQ2_XS] = {
+         .type_name                = "iq2_xs",
+@@ -781,6 +843,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_iq2_xs,
+         .from_float_ref           = NULL,
++	.byteswap		  = ggml_byteswap_iq2_xs,
+     },
+     [GGML_TYPE_IQ3_XXS] = {
+         .type_name                = "iq3_xxs",
+@@ -789,6 +852,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_iq3_xxs,
+         .from_float_ref           = (ggml_from_float_t)quantize_row_iq3_xxs_ref,
++	.byteswap		  = ggml_byteswap_iq3_xxs,
+     },
+     [GGML_TYPE_IQ3_S] = {
+         .type_name                = "iq3_s",
+@@ -797,6 +861,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_iq3_s,
+         .from_float_ref           = (ggml_from_float_t)quantize_row_iq3_s_ref,
++	.byteswap		  = ggml_byteswap_iq3_s,
+     },
+     [GGML_TYPE_IQ2_S] = {
+         .type_name                = "iq2_s",
+@@ -805,6 +870,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_iq2_s,
+         .from_float_ref           = (ggml_from_float_t)quantize_row_iq2_s_ref,
++	.byteswap		  = ggml_byteswap_iq2_s,
+     },
+     [GGML_TYPE_IQ1_S] = {
+         .type_name                = "iq1_s",
+@@ -813,6 +879,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_iq1_s,
+         .from_float_ref           = NULL,
++	.byteswap		  = ggml_byteswap_iq1_s,
+     },
+     [GGML_TYPE_IQ1_M] = {
+         .type_name                = "iq1_m",
+@@ -829,6 +896,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_iq4_nl,
+         .from_float_ref           = (ggml_from_float_t)quantize_row_iq4_nl_ref,
++	.byteswap		  = ggml_byteswap_iq4_nl,
+     },
+     [GGML_TYPE_IQ4_XS] = {
+         .type_name                = "iq4_xs",
+@@ -837,12 +905,14 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_iq4_xs,
+         .from_float_ref           = (ggml_from_float_t)quantize_row_iq4_xs_ref,
++	.byteswap		  = ggml_byteswap_iq4_xs,
+     },
+     [GGML_TYPE_Q8_K] = {
+         .type_name                = "q8_K",
+         .blck_size                = QK_K,
+         .type_size                = sizeof(block_q8_K),
+         .is_quantized             = true,
++	.byteswap		  = ggml_byteswap_q8_k,
+     },
+     [GGML_TYPE_BF16] = {
+         .type_name                = "bf16",
+@@ -851,24 +921,28 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = false,
+         .to_float                 = (ggml_to_float_t) ggml_bf16_to_fp32_row,
+         .from_float_ref           = (ggml_from_float_t) ggml_fp32_to_bf16_row_ref,
++	.byteswap		  = ggml_byteswap_i16,
+     },
+     [31] = { // GGML_TYPE_Q4_0_4_4
+         .type_name                = "TYPE_Q4_0_4_4 REMOVED, use Q4_0 with runtime repacking",
+         .blck_size                = 0,
+         .type_size                = 0,
+         .is_quantized             = false,
++	.byteswap		  = ggml_byteswap_q4_0_4x4,
+     },
+     [32] = { // GGML_TYPE_Q4_0_4_8
+         .type_name                = "TYPE_Q4_0_4_8 REMOVED, use Q4_0 with runtime repacking",
+         .blck_size                = 0,
+         .type_size                = 0,
+         .is_quantized             = false,
++	.byteswap		  = ggml_byteswap_q4_0_4x8,
+     },
+     [33] = { // GGML_TYPE_Q4_0_8_8
+         .type_name                = "TYPE_Q4_0_8_8 REMOVED, use Q4_0 with runtime repacking",
+         .blck_size                = 0,
+         .type_size                = 0,
+         .is_quantized             = false,
++	.byteswap		  = ggml_byteswap_q4_0_8x8,
+     },
+     [GGML_TYPE_TQ1_0] = {
+         .type_name                = "tq1_0",
+@@ -877,6 +951,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_tq1_0,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_tq1_0_ref,
++	.byteswap		  = ggml_byteswap_tq1_0,
+     },
+     [GGML_TYPE_TQ2_0] = {
+         .type_name                = "tq2_0",
+@@ -885,6 +960,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+         .is_quantized             = true,
+         .to_float                 = (ggml_to_float_t) dequantize_row_tq2_0,
+         .from_float_ref           = (ggml_from_float_t) quantize_row_tq2_0_ref,
++	.byteswap		  = ggml_byteswap_tq2_0,
+     },
+     [36] = { // GGML_TYPE_IQ4_NL_4_4
+         .type_name                = "TYPE_IQ4_NL_4_4 REMOVED, use IQ4_NL with runtime repacking",
+@@ -7734,3 +7810,215 @@ bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, cons
+     if (p0->strict_cpu     != p1->strict_cpu )    return false;
+     return memcmp(p0->cpumask, p1->cpumask, GGML_MAX_N_THREADS) == 0;
+ }
++
++static void ggml_byteswap_i16(void * restrict buffer, size_t elements) {
++    uint16_t *data_ptr = (uint16_t*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(data_ptr + i);
++    }
++}
++
++static void ggml_byteswap_i32(void * restrict buffer, size_t elements) {
++    uint32_t *data_ptr = (uint32_t*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap32(data_ptr + i);
++    }
++}
++
++static void ggml_byteswap_i64(void * restrict buffer, size_t elements) {
++    uint64_t *data_ptr = (uint64_t*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap64(data_ptr + i);
++    }
++}
++
++static void ggml_byteswap_q4_0(void * restrict buffer, size_t elements) {
++    block_q4_0 *data_ptr = (block_q4_0*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_q4_1(void * restrict buffer, size_t elements) {
++    block_q4_1 *data_ptr = (block_q4_1*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	ggml_bswap16(&(data_ptr[i].m));
++    }
++}
++
++static void ggml_byteswap_q5_0(void * restrict buffer, size_t elements) {
++    block_q5_0 *data_ptr = (block_q5_0*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_q5_1(void * restrict buffer, size_t elements) {
++    block_q5_1 *data_ptr = (block_q5_1*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	ggml_bswap16(&(data_ptr[i].m));
++    }
++}
++
++static void ggml_byteswap_q8_0(void * restrict buffer, size_t elements) {
++    block_q8_0 *data_ptr = (block_q8_0*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_q8_1(void * restrict buffer, size_t elements) {
++    block_q8_1 *data_ptr = (block_q8_1*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	ggml_bswap16(&(data_ptr[i].s));
++    }
++}
++
++static void ggml_byteswap_q2_k(void * restrict buffer, size_t elements) {
++    block_q2_K *data_ptr = (block_q2_K*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	ggml_bswap16(&(data_ptr[i].dmin));
++    }
++}
++
++static void ggml_byteswap_q3_k(void * restrict buffer, size_t elements) {
++    block_q3_K *data_ptr = (block_q3_K*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_q4_k(void * restrict buffer, size_t elements) {
++    block_q4_K *data_ptr = (block_q4_K*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	ggml_bswap16(&(data_ptr[i].dmin));
++    }
++}
++
++static void ggml_byteswap_q5_k(void * restrict buffer, size_t elements) {
++    block_q5_K *data_ptr = (block_q5_K*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	ggml_bswap16(&(data_ptr[i].dmin));
++    }
++}
++
++static void ggml_byteswap_q6_k(void * restrict buffer, size_t elements) {
++    block_q6_K *data_ptr = (block_q6_K*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_iq2_xxs(void * restrict buffer, size_t elements) {
++    block_iq2_xxs *data_ptr = (block_iq2_xxs*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	for (size_t j = 0; j < QK_K/8; ++j) {
++	    ggml_bswap16(&(data_ptr[i].qs[j]));
++	}
++    }
++}
++
++static void ggml_byteswap_iq2_xs(void * restrict buffer, size_t elements) {
++    block_iq2_xs *data_ptr = (block_iq2_xs*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	for (size_t j = 0; j < QK_K/8; ++j) {
++	    ggml_bswap16(&(data_ptr[i].qs[j]));
++	}
++    }
++}
++
++static void ggml_byteswap_iq3_xxs(void * restrict buffer, size_t elements) {
++    block_iq3_xxs *data_ptr = (block_iq3_xxs*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_iq3_s(void * restrict buffer, size_t elements) {
++    block_iq3_s *data_ptr = (block_iq3_s*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_iq2_s(void * restrict buffer, size_t elements) {
++    block_iq2_s *data_ptr = (block_iq2_s*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_iq1_s(void * restrict buffer, size_t elements) {
++    block_iq1_s *data_ptr = (block_iq1_s*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	for (size_t j = 0; j < QK_K/32; ++j) {
++	    ggml_bswap16(&(data_ptr[i].qh[j]));
++	}
++    }
++}
++
++static void ggml_byteswap_iq4_nl(void * restrict buffer, size_t elements) {
++    block_iq4_nl *data_ptr = (block_iq4_nl*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_iq4_xs(void * restrict buffer, size_t elements) {
++    block_iq4_xs *data_ptr = (block_iq4_xs*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++	ggml_bswap16(&(data_ptr[i].scales_h));
++    }
++}
++
++static void ggml_byteswap_q8_k(void * restrict buffer, size_t elements) {
++    block_q8_K *data_ptr = (block_q8_K*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap32(&(data_ptr[i].d));
++	for (size_t j = 0; j < QK_K/16; ++j) {
++	    ggml_bswap16(&(data_ptr[i].bsums[j]));
++	}
++    }
++}
++
++static void ggml_byteswap_q4_0_4x4(void * restrict buffer, size_t elements) {
++    GGML_ASSERT(false && "function ggml_byteswap_q4_0_4x4 is not implemented yet");
++    UNUSED(buffer);
++    UNUSED(elements);
++}
++
++static void ggml_byteswap_q4_0_4x8(void * restrict buffer, size_t elements) {
++    GGML_ASSERT(false && "function ggml_byteswap_q4_0_4x8 is not implemented yet");
++    UNUSED(buffer);
++    UNUSED(elements);
++}
++
++static void ggml_byteswap_q4_0_8x8(void * restrict buffer, size_t elements) {
++    GGML_ASSERT(false && "function ggml_byteswap_q4_0_8x8 is not implemented yet");
++    UNUSED(buffer);
++    UNUSED(elements);
++}
++
++static void ggml_byteswap_tq1_0(void * restrict buffer, size_t elements) {
++    block_tq1_0 *data_ptr = (block_tq1_0*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
++
++static void ggml_byteswap_tq2_0(void * restrict buffer, size_t elements) {
++    block_tq2_0 *data_ptr = (block_tq2_0*) buffer;
++    for (size_t i = 0; i < elements; ++i) {
++	ggml_bswap16(&(data_ptr[i].d));
++    }
++}
+diff --git a/ggml/src/gguf.cpp b/ggml/src/gguf.cpp
+index cbeedf6..de748fc 100644
+--- a/ggml/src/gguf.cpp
++++ b/ggml/src/gguf.cpp
+@@ -225,9 +225,12 @@ struct gguf_context {
+     size_t size      = 0; // size of `data` in bytes
+ 
+     void * data = nullptr;
++    bool needs_byteswap = false; //only for reading, writing in non-native endianness is not supported
+ };
+ 
+ struct gguf_reader {
++    bool do_byteswap = false;
++
+     gguf_reader(FILE * file) : file(file) {
+         // read the remaining bytes once and update on each read
+         nbytes_remain = file_remain(file);
+@@ -261,6 +264,9 @@ struct gguf_reader {
+             return false;
+         }
+         const size_t nread = fread(&dst, 1, size, file);
++        if (do_byteswap) {
++            ggml_bswap(&dst);
++        }
+         nbytes_remain -= nread;
+         return nread == size;
+     }
+@@ -395,7 +401,7 @@ bool gguf_read_emplace_helper(const struct gguf_reader & gr, std::vector<struct
+ }
+ 
+ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_params params) {
+-    const struct gguf_reader gr(file);
++    struct gguf_reader gr(file);
+     struct gguf_context * ctx = new gguf_context;
+ 
+     bool ok = true;
+@@ -429,6 +435,16 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
+     int64_t n_tensors = 0;
+ 
+     if (ok && gr.read(ctx->version)) {
++	uint32_t original_version = ctx->version;
++
++	if ((params.allow_byteswapping) && ((ctx->version & 0x0000FFFF) == 0) && ((ctx->version & 0xFFFF0000) != 0)) {
++	    // most likely different endianness, do byteswapping
++	    gr.do_byteswap = true;
++	    ctx->needs_byteswap = true;
++	    ggml_bswap(&(ctx->version));
++	    GGML_LOG_INFO("%s: Entered byteswapping, corrected version from %" PRIu32 "to new GGUF file version %" PRIu32 "\n", __func__, original_version, ctx->version);
++	}
++
+         if (ok && ctx->version == 0) {
+             GGML_LOG_ERROR("%s: bad GGUF version: %" PRIu32 "\n", __func__, ctx->version);
+             ok = false;
+@@ -441,7 +457,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
+          * the last 4 hexadecimal digits to check if the model is the same
+          * endianness as the host system.
+         */
+-        if (ok && (ctx->version & 0x0000FFFF) == 0x00000000) {
++        if (ok && !ctx->needs_byteswap && (ctx->version & 0x0000FFFF) == 0x00000000) {
+             GGML_LOG_ERROR("%s: failed to load model: this GGUF file version %" PRIu32 " is extremely large, is there a mismatch between the host and model endianness?\n", __func__, ctx->version);
+             ok = false;
+         }
+@@ -1541,3 +1557,7 @@ void gguf_get_meta_data(const struct gguf_context * ctx, void * data) {
+     gguf_write_to_buf(ctx, buf, /*only_meta =*/ true);
+     memcpy(data, buf.data(), buf.size());
+ }
++
++bool gguf_needs_byteswap(const struct gguf_context * ctx) {
++    return ctx->needs_byteswap;
++}
+diff --git a/gguf-py/gguf/gguf_writer.py b/gguf-py/gguf/gguf_writer.py
+index 010dfee..bdc1685 100644
+--- a/gguf-py/gguf/gguf_writer.py
++++ b/gguf-py/gguf/gguf_writer.py
+@@ -466,6 +466,11 @@ class GGUFWriter:
+                 for ti in tensors.values():
+                     assert ti.tensor is not None  # can only iterate once over the tensors
+                     assert ti.tensor.nbytes == ti.nbytes
++                    
++                    if (self.endianess == GGUFEndian.BIG and sys.byteorder == 'little') or (self.endianess == GGUFEndian.LITTLE and sys.byteorder == 'big'):
++                        # ti.tensor.byteswap(inplace=True) just didn't work here
++                        ti.tensor = ti.tensor.byteswap()
++
+                     ti.tensor.tofile(fout)
+                     if shard_bar is not None:
+                         shard_bar.update(ti.nbytes)
+diff --git a/src/llama-adapter.cpp b/src/llama-adapter.cpp
+index 2f2cc12..627ef93 100644
+--- a/src/llama-adapter.cpp
++++ b/src/llama-adapter.cpp
+@@ -153,6 +153,7 @@ static void llama_adapter_lora_init_impl(llama_model & model, const char * path_
+     gguf_init_params meta_gguf_params = {
+         /* .no_alloc = */ true,
+         /* .ctx      = */ &ctx_init,
++	/* .allow_byteswapping = */ true,
+     };
+ 
+     gguf_context_ptr ctx_gguf { gguf_init_from_file(path_lora, meta_gguf_params) };
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 6aa7363..58b4eb4 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -1863,12 +1863,17 @@ int llama_context::decode(const llama_batch & batch_inp) {
+                 // remember the swaps and apply them lazily upon logits/embeddings access
+                 output_swaps.push_back({ i, j_min });
+             }
+-
++	
++            #ifndef __MVS__
+             std::fill(output_ids.begin(), output_ids.end(), -1);
+-
++	    #else
++	    for (auto& id: output_ids) {
++		id = -1;
++	    }
+             for (uint32_t i = 0; i < n_outputs; ++i) {
+                 output_ids[out_ids[i]] = i;
+             }
++	    #endif
+         }
+     }
+ 
+@@ -2004,7 +2009,9 @@ uint32_t llama_context::output_reserve(int32_t n_outputs) {
+     }
+ 
+     // set all ids as invalid (negative)
+-    std::fill(output_ids.begin(), output_ids.end(), -1);
++    for (auto & id : output_ids) {
++        id = -1;
++    }
+ 
+     this->n_outputs = 0;
+ 
+diff --git a/src/llama-hparams.h b/src/llama-hparams.h
+index 78c0bc2..836cf38 100644
+--- a/src/llama-hparams.h
++++ b/src/llama-hparams.h
+@@ -3,6 +3,7 @@
+ #include "llama.h"
+ 
+ #include <array>
++#include <algorithm>
+ #include <cassert>
+ 
+ // bump if necessary
+diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
+index 413f34c..04a17af 100644
+--- a/src/llama-model-loader.cpp
++++ b/src/llama-model-loader.cpp
+@@ -535,8 +535,9 @@ llama_model_loader::llama_model_loader(
+         // Load the main GGUF
+         struct ggml_context * ctx = NULL;
+         struct gguf_init_params params = {
+-            /*.no_alloc = */ true,
+-            /*.ctx      = */ &ctx,
++            /*.no_alloc           = */ true,
++            /*.ctx                = */ &ctx,
++            /*.allow_byteswapping = */ true,
+         };
+ 
+         metadata_ptr.reset(gguf_init_from_file(fname.c_str(), params));
+@@ -610,8 +611,9 @@ llama_model_loader::llama_model_loader(
+                 const char * fname_split = splits[idx].c_str();
+ 
+                 struct gguf_init_params split_params = {
+-                    /*.no_alloc = */ true,
+-                    /*.ctx      = */ &ctx,
++                    /*.no_alloc           = */ true,
++                    /*.ctx                = */ &ctx,
++                    /*.allow_byteswapping = */ true,
+                 };
+                 gguf_context_ptr ctx_gguf { gguf_init_from_file(fname_split, split_params) };
+                 if (!ctx_gguf) {
+@@ -776,6 +778,9 @@ llama_model_loader::llama_model_loader(
+     if (!llama_mmap::SUPPORTED) {
+         LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
+         use_mmap = false;
++    } else if (gguf_needs_byteswap(metadata)) {
++	LLAMA_LOG_WARN("%s: gguf file needs byteswapping, mmap is disabled. This may affect performance.\n", __func__);
++	use_mmap = false;
+     }
+ 
+     this->use_mmap = use_mmap;
+@@ -1349,6 +1354,13 @@ void llama_model_loader::load_data_for(struct ggml_tensor * cur) const {
+         const auto & file = files.at(w.idx);
+         file->seek(w.offs, SEEK_SET);
+         file->read_raw(cur->data, ggml_nbytes(cur));
++
++	if (gguf_needs_byteswap(metadata)) {
++	    auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++	    if (byteswap != nullptr) {
++		byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
++	    }
++	}
+     }
+ 
+     if (check_tensors && !ggml_validate_row_data(cur->type, cur->data, ggml_nbytes(cur))) {
+@@ -1520,6 +1532,14 @@ bool llama_model_loader::load_all_data(
+             if (ggml_backend_buffer_is_host(cur->buffer)) {
+                 file->seek(weight->offs, SEEK_SET);
+                 file->read_raw(cur->data, n_size);
++
++	        if (gguf_needs_byteswap(metadata)) {
++	            auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++	            if (byteswap != nullptr) {
++		        byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
++	            }
++	        }
++
+                 if (check_tensors) {
+                     validation_result.emplace_back(std::async(std::launch::async, [cur, n_size] {
+                         return std::make_pair(cur, ggml_validate_row_data(cur->type, cur->data, n_size));
+@@ -1541,8 +1561,11 @@ bool llama_model_loader::load_all_data(
+                     size_t bytes_read = 0;
+                     size_t data_read = 0;  // Actual tensor data copied (excluding padding)
+ 
++                    // for byteswapping purposes ensure that there is whole number of elements in buffer
++                    const size_t buf_size_aligned = gguf_needs_byteswap(metadata) ? buffer_size - (buffer_size % ggml_blck_size(cur->type)) : buffer_size;
++
+                     while (bytes_read < read_end - read_start) {
+-                        size_t read_size = std::min<size_t>(buffer_size, read_end - read_start - bytes_read);
++                        size_t read_size = std::min<size_t>(buf_size_aligned, read_end - read_start - bytes_read);
+ 
+                         // Align the destination pointer within the pinned buffer
+                         uintptr_t ptr_dest_aligned = (reinterpret_cast<uintptr_t>(host_ptrs[buffer_idx]) + alignment - 1) & ~(alignment - 1);
+@@ -1568,6 +1591,13 @@ bool llama_model_loader::load_all_data(
+                             data_to_copy -= (read_end - (offset + n_size));
+                         }
+ 
++                        if (gguf_needs_byteswap(metadata)) {
++                            auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++                            if (byteswap != nullptr) {
++                                byteswap(reinterpret_cast<void *>(ptr_data), data_to_copy / ggml_blck_size(cur->type));
++                            }
++                        }
++
+                         // Async upload actual data to GPU
+                         ggml_backend_tensor_set_async(upload_backend, cur,
+                                                       reinterpret_cast<void *>(ptr_data), data_read, data_to_copy);
+@@ -1583,6 +1613,12 @@ bool llama_model_loader::load_all_data(
+                     read_buf.resize(n_size);
+                     file->seek(weight->offs, SEEK_SET);
+                     file->read_raw(read_buf.data(), n_size);
++		    if (gguf_needs_byteswap(metadata)) {
++	    		auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++	    		if (byteswap != nullptr) {
++			    byteswap(read_buf.data(), ggml_nelements(cur) / ggml_blck_size(cur->type));
++	    		}
++		    }
+                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
+                     if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
+                         throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+diff --git a/tests/test-gguf.cpp b/tests/test-gguf.cpp
+index 8ebd16b..f4c2e4b 100644
+--- a/tests/test-gguf.cpp
++++ b/tests/test-gguf.cpp
+@@ -740,6 +740,7 @@ static std::pair<int, int> test_handcrafted_file(const unsigned int seed) {
+         struct gguf_init_params gguf_params = {
+             /*no_alloc =*/ false,
+             /*ctx      =*/ hft >= offset_has_data ? &ctx : nullptr,
++	    /*.allow_byteswapping = */ true,
+         };
+ 
+         struct gguf_context * gguf_ctx = gguf_init_from_file_impl(file, gguf_params);
+@@ -1136,6 +1137,7 @@ static std::pair<int, int> test_roundtrip(ggml_backend_dev_t dev, const unsigned
+     struct gguf_init_params gguf_params = {
+         /*no_alloc =*/ false,
+         /*ctx      =*/ only_meta ? nullptr : &ctx_1,
++	/*.allow_byteswapping = */ true,
+     };
+     struct gguf_context * gguf_ctx_1 = gguf_init_from_file_impl(file, gguf_params);
+ 
+diff --git a/tools/export-lora/export-lora.cpp b/tools/export-lora/export-lora.cpp
+index 50774c5..beb016e 100644
+--- a/tools/export-lora/export-lora.cpp
++++ b/tools/export-lora/export-lora.cpp
+@@ -51,6 +51,7 @@ static struct gguf_context * load_gguf(std::string & fname, struct ggml_context
+     struct gguf_init_params params = {
+         /*.no_alloc = */ true,
+         /*.ctx      = */ ctx_ggml,
++	/*.allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(fname.c_str(), params);
+     if (!ctx_gguf) {
+diff --git a/tools/gguf-split/gguf-split.cpp b/tools/gguf-split/gguf-split.cpp
+index f99f029..be4e2a4 100644
+--- a/tools/gguf-split/gguf-split.cpp
++++ b/tools/gguf-split/gguf-split.cpp
+@@ -329,14 +329,20 @@ struct split_strategy {
+                 const char * t_name = gguf_get_tensor_name(ctx_out, i);
+                 struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
+                 auto n_bytes = ggml_nbytes(t);
+-                read_buf.resize(n_bytes);
++                auto n_elements = ggml_nelements(t) / ggml_blck_size(t->type);
++		read_buf.resize(n_bytes);
+ 
+                 // calculate offset
+                 auto i_tensor_in = gguf_find_tensor(ctx_gguf, t_name); // idx of tensor in the input file
+                 auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor_in);
+ 
++		ggml_byteswap_t byteswap_func = nullptr;
++		if (gguf_needs_byteswap(ctx_gguf)) {
++		    byteswap_func = ggml_get_type_traits(t->type)->byteswap;
++		}
++
+                 // copy tensor from input to output file
+-                copy_file_to_file(f_input, fout, offset, n_bytes);
++                copy_file_to_file(f_input, fout, offset, n_bytes, n_elements, byteswap_func);
+                 zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);
+             }
+ 
+@@ -347,13 +353,18 @@ struct split_strategy {
+         }
+     }
+ 
+-    void copy_file_to_file(std::ifstream & f_in, std::ofstream & f_out, const size_t in_offset, const size_t len) {
++    void copy_file_to_file(std::ifstream & f_in, std::ofstream & f_out, const size_t in_offset, const size_t len, const size_t elements, ggml_byteswap_t byteswap_func) {
+         // TODO: detect OS and use copy_file_range() here for better performance
+         if (read_buf.size() < len) {
+             read_buf.resize(len);
+         }
+         f_in.seekg(in_offset);
+         f_in.read((char *)read_buf.data(), len);
++
++	if (byteswap_func != nullptr) {
++	    byteswap_func(read_buf.data(), elements);
++	}
++
+         f_out.write((const char *)read_buf.data(), len);
+     }
+ };
+@@ -364,6 +375,7 @@ static void gguf_split(const split_params & split_params) {
+     struct gguf_init_params params = {
+         /*.no_alloc = */ true,
+         /*.ctx      = */ &ctx_meta,
++	/*.allow_byteswapping = */ true,
+     };
+ 
+     std::ifstream f_input(split_params.input.c_str(), std::ios::binary);
+@@ -427,6 +439,7 @@ static void gguf_merge(const split_params & split_params) {
+         struct gguf_init_params params = {
+             /*.no_alloc = */ true,
+             /*.ctx      = */ &ctx_meta,
++	    /*.allow_byteswapping = */ true,
+         };
+ 
+         if (i_split > 0) {
+@@ -540,7 +553,15 @@ static void gguf_merge(const split_params & split_params) {
+             auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor);
+             f_input.seekg(offset);
+             f_input.read((char *)read_data.data(), n_bytes);
+-            if (!split_params.dry_run) {
++            
++	    if (gguf_needs_byteswap(ctx_gguf)) {
++		auto byteswap = ggml_get_type_traits(t->type)->byteswap;
++		if (byteswap != nullptr) {
++		    byteswap(read_data.data(), ggml_nelements(t) / ggml_blck_size(t->type));
++		}
++	    }
++	    
++	    if (!split_params.dry_run) {
+                 // write tensor data + padding
+                 fout.write((const char *)read_data.data(), n_bytes);
+                 zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);
+diff --git a/tools/imatrix/imatrix.cpp b/tools/imatrix/imatrix.cpp
+index bbedb15..51f356b 100644
+--- a/tools/imatrix/imatrix.cpp
++++ b/tools/imatrix/imatrix.cpp
+@@ -719,6 +719,7 @@ bool IMatrixCollector::load_imatrix(const char * file_name) {
+     struct gguf_init_params meta_gguf_params = {
+         /* .no_alloc = */ false, // the data is needed
+         /* .ctx      = */ &ctx,
++	/* .allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(file_name, meta_gguf_params);
+     if (!ctx_gguf) {
+diff --git a/tools/mtmd/clip.cpp b/tools/mtmd/clip.cpp
+index a47f1f4..f3f9fd7 100644
+--- a/tools/mtmd/clip.cpp
++++ b/tools/mtmd/clip.cpp
+@@ -911,6 +911,7 @@ struct clip_model_loader {
+         struct gguf_init_params params = {
+             /*.no_alloc = */ true,
+             /*.ctx      = */ &meta,
++	    /*.allow_byteswapping = */ true,
+         };
+ 
+         ctx_gguf = gguf_context_ptr(gguf_init_from_file(fname, params));
+diff --git a/tools/quantize/quantize.cpp b/tools/quantize/quantize.cpp
+index 24e0a46..da745db 100644
+--- a/tools/quantize/quantize.cpp
++++ b/tools/quantize/quantize.cpp
+@@ -252,6 +252,7 @@ static int load_imatrix(const std::string & imatrix_file, std::vector<std::strin
+     struct gguf_init_params meta_gguf_params = {
+         /* .no_alloc = */ false, // the data is needed
+         /* .ctx      = */ &ctx,
++	/* .allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(imatrix_file.c_str(), meta_gguf_params);
+     if (!ctx_gguf) {
+diff --git a/vendor/cpp-httplib/httplib.cpp b/vendor/cpp-httplib/httplib.cpp
+index fa07182..8803a41 100644
+--- a/vendor/cpp-httplib/httplib.cpp
++++ b/vendor/cpp-httplib/httplib.cpp
+@@ -875,7 +875,12 @@ bool write_websocket_frame(Stream &strm, ws::Opcode opcode,
+ 
+   if (mask) {
+     // Generate random mask key
++#ifdef __MVS__
++    static __tlssim<std::mt19937> rng_storage(std::mt19937(std::random_device{}()));
++    std::mt19937& rng = *rng_storage.access();
++#else
+     thread_local std::mt19937 rng(std::random_device{}());
++#endif
+     uint8_t mask_key[4];
+     auto r = rng();
+     std::memcpy(mask_key, &r, 4);
+@@ -1107,7 +1112,12 @@ std::string encode_path(const std::string &s) {
+ 
+ std::string file_extension(const std::string &path) {
+   std::smatch m;
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(std::regex("\\.([a-zA-Z0-9]+)$"));
++  std::regex& re = *re_storage.access();
++#else
+   thread_local auto re = std::regex("\\.([a-zA-Z0-9]+)$");
++#endif
+   if (std::regex_search(path, m, re)) { return m[1].str(); }
+   return std::string();
+ }
+@@ -1180,6 +1190,36 @@ bool parse_trailers(stream_line_reader &line_reader, Headers &dest,
+   // chunked transfer coding data without the final CRLF.
+ 
+   // RFC 7230 Section 4.1.2 - Headers prohibited in trailers
++#ifdef __MVS__
++  static __tlssim<case_ignore::unordered_set<std::string>> prohibited_trailers_storage({
++      "transfer-encoding",
++      "content-length",
++      "host",
++      "authorization",
++      "www-authenticate",
++      "proxy-authenticate",
++      "proxy-authorization",
++      "cookie",
++      "set-cookie",
++      "cache-control",
++      "expect",
++      "max-forwards",
++      "pragma",
++      "range",
++      "te",
++      "age",
++      "expires",
++      "date",
++      "location",
++      "retry-after",
++      "vary",
++      "warning",
++      "content-encoding",
++      "content-type",
++      "content-range",
++      "trailer"});
++  case_ignore::unordered_set<std::string>& prohibited_trailers = *prohibited_trailers_storage.access();
++#else
+   thread_local case_ignore::unordered_set<std::string> prohibited_trailers = {
+       "transfer-encoding",
+       "content-length",
+@@ -1207,6 +1247,7 @@ bool parse_trailers(stream_line_reader &line_reader, Headers &dest,
+       "content-type",
+       "content-range",
+       "trailer"};
++#endif
+ 
+   case_ignore::unordered_set<std::string> declared_trailers;
+   auto trailer_header = get_header_value(src_headers, "Trailer", "", 0);
+@@ -4242,6 +4283,18 @@ std::string random_string(size_t length) {
+   constexpr const char data[] =
+       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+ 
++#ifdef __MVS__
++  static __tlssim<std::mt19937> engine_storage([]() {
++    // std::random_device might actually be deterministic on some
++    // platforms, but due to lack of support in the c++ standard library,
++    // doing better requires either some ugly hacks or breaking portability.
++    std::random_device seed_gen;
++    // Request 128 bits of entropy for initialization
++    std::seed_seq seed_sequence{seed_gen(), seed_gen(), seed_gen(), seed_gen()};
++    return std::mt19937(seed_sequence);
++  }());
++  std::mt19937& engine = *engine_storage.access();
++#else
+   thread_local auto engine([]() {
+     // std::random_device might actually be deterministic on some
+     // platforms, but due to lack of support in the c++ standard library,
+@@ -4251,6 +4304,7 @@ std::string random_string(size_t length) {
+     std::seed_seq seed_sequence{seed_gen(), seed_gen(), seed_gen(), seed_gen()};
+     return std::mt19937(seed_sequence);
+   }());
++#endif
+ 
+   std::string result;
+   for (size_t i = 0; i < length; i++) {
+@@ -4659,8 +4713,13 @@ bool parse_www_authenticate(const Response &res,
+                                    bool is_proxy) {
+   auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
+   if (res.has_header(auth_key)) {
++#ifdef __MVS__
++    static __tlssim<std::regex> re_storage(std::regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~"));
++    std::regex& re = *re_storage.access();
++#else
+     thread_local auto re =
+         std::regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
++#endif
+     auto s = res.get_header_value(auth_key);
+     auto pos = s.find(' ');
+     if (pos != std::string::npos) {
+@@ -5698,7 +5757,12 @@ std::string sanitize_filename(const std::string &filename) {
+ std::string append_query_params(const std::string &path,
+                                        const Params &params) {
+   std::string path_with_query = path;
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(std::regex("[^?]+\\?.*"));
++  std::regex& re = *re_storage.access();
++#else
+   thread_local const std::regex re("[^?]+\\?.*");
++#endif
+   auto delm = std::regex_match(path, re) ? '&' : '?';
+   path_with_query += delm + detail::params_to_query_str(params);
+   return path_with_query;
+@@ -7068,9 +7132,15 @@ bool Server::parse_request_line(const char *s, Request &req) const {
+     if (count != 3) { return false; }
+   }
+ 
++#ifdef __MVS__
++  static __tlssim<std::set<std::string>> methods_storage({"GET",     "HEAD",    "POST",  "PUT",   "DELETE",
++      "CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"});
++  std::set<std::string>& methods = *methods_storage.access();
++#else
+   thread_local const std::set<std::string> methods{
+       "GET",     "HEAD",    "POST",  "PUT",   "DELETE",
+       "CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
++#endif
+ 
+   if (methods.find(req.method) == methods.end()) {
+     output_error_log(Error::InvalidHTTPMethod, &req);
+@@ -8452,9 +8522,19 @@ bool ClientImpl::read_response_line(Stream &strm, const Request &req,
+   if (!line_reader.getline()) { return false; }
+ 
+ #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(std::regex("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n"));
++  std::regex& re = *re_storage.access();
++#else
+   thread_local const std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
++#endif
++#else
++#ifdef __MVS__
++  static __tlssim<std::regex> re_storage(std::regex("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n"));
++  std::regex& re = *re_storage.access();
+ #else
+   thread_local const std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
++#endif
+ #endif
+ 
+   std::cmatch m;
+@@ -12140,13 +12220,23 @@ PeerCert get_peer_cert_from_session(const_session_t session) {
+ namespace impl {
+ 
+ VerifyCallback &get_verify_callback() {
++#ifdef __MVS__
++  static __tlssim<VerifyCallback> callback_storage;
++  return *callback_storage.access();
++#else
+   static thread_local VerifyCallback callback;
+   return callback;
++#endif
+ }
+ 
+ VerifyCallback &get_mbedtls_verify_callback() {
++#ifdef __MVS__
++  static __tlssim<VerifyCallback> callback_storage;
++  return *callback_storage.access();
++#else
+   static thread_local VerifyCallback callback;
+   return callback;
++#endif
+ }
+ 
+ // Check if a string is an IPv4 address
+@@ -13719,8 +13809,13 @@ struct MbedTlsSession {
+ // Thread-local error code accessor for Mbed TLS (since it doesn't have an error
+ // queue)
+ int &mbedtls_last_error() {
++#ifdef __MVS__
++  static __tlssim<int> err_storage(0);
++  return *err_storage.access();
++#else
+   static thread_local int err = 0;
+   return err;
++#endif
+ }
+ 
+ // Helper to map Mbed TLS error to ErrorCode
+@@ -13813,8 +13908,13 @@ MbedTlsContext::~MbedTlsContext() {
+ // This is needed because the SNI callback doesn't have a way to pass
+ // session-specific data before the session is fully set up
+ std::string &mbedpending_sni() {
++#ifdef __MVS__
++  static __tlssim<std::string> sni_storage;
++  return *sni_storage.access();
++#else
+   static thread_local std::string sni;
+   return sni;
++#endif
+ }
+ 
+ // SNI callback for Mbed TLS server to capture client's SNI hostname
+@@ -13854,8 +13954,15 @@ int mbedtls_verify_callback(void *data, mbedtls_x509_crt *crt,
+   verify_ctx.error_code = static_cast<long>(*flags);
+ 
+   // Convert Mbed TLS flags to error string
++#ifdef __MVS__
++  static __tlssim<std::array<char, 256>> error_buf_storage;
++#else
+   static thread_local char error_buf[256];
++#endif
+   if (*flags != 0) {
++#ifdef __MVS__
++    char* error_buf = error_buf_storage.access()->data();
++#endif
+     mbedtls_x509_crt_verify_info(error_buf, sizeof(error_buf), "", *flags);
+     verify_ctx.error_string = error_buf;
+   } else {
+@@ -14970,8 +15077,13 @@ struct WolfSSLSession {
+ 
+ // Thread-local error code accessor for wolfSSL
+ uint64_t &wolfssl_last_error() {
++#ifdef __MVS__
++  static __tlssim<uint64_t> err_storage(0);
++  return *err_storage.access();
++#else
+   static thread_local uint64_t err = 0;
+   return err;
++#endif
+ }
+ 
+ // Helper to map wolfSSL error to ErrorCode.
+diff --git a/vendor/cpp-httplib/httplib.h b/vendor/cpp-httplib/httplib.h
+index 6ec949a..954ac6a 100644
+--- a/vendor/cpp-httplib/httplib.h
++++ b/vendor/cpp-httplib/httplib.h
+@@ -271,6 +271,9 @@ using socklen_t = int;
+ #endif
+ #ifdef __MVS__
+ #include <strings.h>
++#include <zos-tls.h>
++#include <sys/time.h>
++#include <regex>
+ #ifndef NI_MAXHOST
+ #define NI_MAXHOST 1025
+ #endif
+@@ -500,6 +503,16 @@ using socket_t = int;
+ /*
+  * Declaration
+  */
++#ifdef __MVS__
++#include <strings.h>
++#include <zos-tls.h>
++#include <sys/time.h>
++#include <regex>
++#ifndef NI_MAXHOST
++#define NI_MAXHOST 1025
++#endif
++#endif
++
+ namespace httplib {
+ 
+ namespace ws {
+diff --git a/vendor/miniaudio/miniaudio.h b/vendor/miniaudio/miniaudio.h
+index c6d493e..910a0c6 100644
+--- a/vendor/miniaudio/miniaudio.h
++++ b/vendor/miniaudio/miniaudio.h
+@@ -17579,7 +17579,7 @@ static ma_result ma_thread_create__posix(ma_thread* pThread, ma_thread_priority
+     int result;
+     pthread_attr_t* pAttr = NULL;
+ 
+-#if !defined(MA_EMSCRIPTEN) && !defined(MA_3DS) && !defined(MA_SWITCH)
++#if !defined(MA_EMSCRIPTEN) && !defined(MA_3DS) && !defined(MA_SWITCH) && !defined(__MVS__)
+     /* Try setting the thread priority. It's not critical if anything fails here. */
+     pthread_attr_t attr;
+     if (pthread_attr_init(&attr) == 0) {
+diff --git a/vendor/stb/stb_image.h b/vendor/stb/stb_image.h
+index 9eedabe..92d5251 100644
+--- a/vendor/stb/stb_image.h
++++ b/vendor/stb/stb_image.h
+@@ -620,6 +620,10 @@ STBIDEF int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const ch
+    #define stbi_inline __forceinline
+ #endif
+ 
++#ifdef __MVS__
++   #define STBI_NO_THREAD_LOCALS
++#endif
++
+ #ifndef STBI_NO_THREAD_LOCALS
+    #if defined(__cplusplus) &&  __cplusplus >= 201103L
+       #define STBI_THREAD_LOCAL       thread_local
+@@ -721,6 +725,10 @@ typedef unsigned char validate_uint32[sizeof(stbi__uint32)==4 ? 1 : -1];
+ #define STBI_NO_SIMD
+ #endif
+ 
++#if defined(__MVS__)
++#include <zos-tls.h>
++#endif
++
+ #if !defined(STBI_NO_SIMD) && (defined(STBI__X86_TARGET) || defined(STBI__X64_TARGET))
+ #define STBI_SSE2
+ #include <emmintrin.h>
+@@ -963,11 +971,33 @@ static int      stbi__pnm_info(stbi__context *s, int *x, int *y, int *comp);
+ static int      stbi__pnm_is16(stbi__context *s);
+ #endif
+ 
++#if defined(__MVS__)
++static __tlssim<const char*> stbi__g_failure_reason_tls("");
++#define stbi__g_failure_reason (*stbi__g_failure_reason_tls.access())
++
++#ifndef STBI_NO_THREAD_LOCALS
++static __tlssim<int> stbi__vertically_flip_on_load_local_tls(0);
++static __tlssim<int> stbi__vertically_flip_on_load_set_tls(0);
++static __tlssim<int> stbi__unpremultiply_on_load_local_tls(0);
++static __tlssim<int> stbi__unpremultiply_on_load_set_tls(0);
++static __tlssim<int> stbi__de_iphone_flag_local_tls(0);
++static __tlssim<int> stbi__de_iphone_flag_set_tls(0);
++
++#define stbi__vertically_flip_on_load_local (*stbi__vertically_flip_on_load_local_tls.access())
++#define stbi__vertically_flip_on_load_set (*stbi__vertically_flip_on_load_set_tls.access())
++#define stbi__unpremultiply_on_load_local (*stbi__unpremultiply_on_load_local_tls.access())
++#define stbi__unpremultiply_on_load_set (*stbi__unpremultiply_on_load_set_tls.access())
++#define stbi__de_iphone_flag_local (*stbi__de_iphone_flag_local_tls.access())
++#define stbi__de_iphone_flag_set (*stbi__de_iphone_flag_set_tls.access())
++#endif
++
++#else
+ static
+ #ifdef STBI_THREAD_LOCAL
+ STBI_THREAD_LOCAL
+ #endif
+ const char *stbi__g_failure_reason;
++#endif
+ 
+ STBIDEF const char *stbi_failure_reason(void)
+ {
