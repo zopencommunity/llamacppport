@@ -174,7 +174,7 @@ index 0587109..8bfcdf6 100644
  
  void ggml_backend_load_all_from_path(const char * dir_path) {
 diff --git a/ggml/src/ggml-cpu/CMakeLists.txt b/ggml/src/ggml-cpu/CMakeLists.txt
-index 1a1bbc9..7ce8c79 100644
+index 1a1bbc9..bad6210 100644
 --- a/ggml/src/ggml-cpu/CMakeLists.txt
 +++ b/ggml/src/ggml-cpu/CMakeLists.txt
 @@ -549,6 +549,30 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
@@ -194,17 +194,17 @@ index 1a1bbc9..7ce8c79 100644
 +            target_compile_options(${GGML_CPU_NAME} PRIVATE "-qarch=${TARGET_ARCH}")
 +        endif()
 +        target_include_directories(${GGML_CPU_NAME} PRIVATE /usr/include)
-+        target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
-+        # MASSV vectorized math â disabled by default (vsexp has issues in interactive mode)
++        # MASS/MASSV vectorized math â disabled by default (vsexp has issues in interactive mode)
 +        # To enable: cmake -DGGML_USE_MASSV=ON
 +        if(GGML_USE_MASSV)
++            target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
 +            target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
 +            target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_MASS)
++            message(STATUS "MASS enabled: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
 +            message(STATUS "MASSV enabled: /usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
 +        else()
-+            message(STATUS "MASSV disabled (use -DGGML_USE_MASSV=ON to enable)")
++            message(STATUS "MASS/MASSV disabled (use -DGGML_USE_MASSV=ON to enable)")
 +        endif()
-+        message(STATUS "Found MASS: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
      else()
          message(WARNING "Unknown CPU architecture. Falling back to generic implementations.")
          list(APPEND ARCH_FLAGS -DGGML_CPU_GENERIC)
@@ -2211,32 +2211,6 @@ index 2f2cc12..56c7369 100644
      };
  
      gguf_context_ptr ctx_gguf { gguf_init_from_file(path_lora, meta_gguf_params) };
-diff --git a/src/llama-context.cpp b/src/llama-context.cpp
-index 6aa7363..2b8d388 100644
---- a/src/llama-context.cpp
-+++ b/src/llama-context.cpp
-@@ -1864,7 +1864,9 @@ int llama_context::decode(const llama_batch & batch_inp) {
-                 output_swaps.push_back({ i, j_min });
-             }
- 
--            std::fill(output_ids.begin(), output_ids.end(), -1);
-+            for (auto & id : output_ids) {
-+                id = -1;
-+            }
- 
-             for (uint32_t i = 0; i < n_outputs; ++i) {
-                 output_ids[out_ids[i]] = i;
-@@ -2004,7 +2006,9 @@ uint32_t llama_context::output_reserve(int32_t n_outputs) {
-     }
- 
-     // set all ids as invalid (negative)
--    std::fill(output_ids.begin(), output_ids.end(), -1);
-+    for (auto & id : output_ids) {
-+        id = -1;
-+    }
- 
-     this->n_outputs = 0;
- 
 diff --git a/src/llama-hparams.h b/src/llama-hparams.h
 index 78c0bc2..836cf38 100644
 --- a/src/llama-hparams.h
