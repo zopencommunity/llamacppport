@@ -174,10 +174,10 @@ index 0587109..8bfcdf6 100644
  
  void ggml_backend_load_all_from_path(const char * dir_path) {
 diff --git a/ggml/src/ggml-cpu/CMakeLists.txt b/ggml/src/ggml-cpu/CMakeLists.txt
-index 1a1bbc9..7f57a3a 100644
+index 1a1bbc9..7ce8c79 100644
 --- a/ggml/src/ggml-cpu/CMakeLists.txt
 +++ b/ggml/src/ggml-cpu/CMakeLists.txt
-@@ -549,6 +549,29 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+@@ -549,6 +549,30 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
      elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "wasm")
          message(STATUS "Wasm detected")
          list (APPEND GGML_CPU_SOURCES ggml-cpu/arch/wasm/quants.c)
@@ -185,6 +185,7 @@ index 1a1bbc9..7f57a3a 100644
 +        message(STATUS "z/OS detected")
 +        list(APPEND ARCH_FLAGS -fzvector -m64 -march=z15)
 +        list(APPEND GGML_CPU_SOURCES ggml-cpu/arch/s390/quants.c)
++        list(APPEND GGML_CPU_SOURCES ggml-cpu/arch/s390/repack.cpp)
 +        list(APPEND ARCH_DEFINITIONS GGML_VXE)
 +        if(NOT DEFINED TARGET_ARCH)
 +            set(TARGET_ARCH 13)
@@ -208,7 +209,7 @@ index 1a1bbc9..7f57a3a 100644
          message(WARNING "Unknown CPU architecture. Falling back to generic implementations.")
          list(APPEND ARCH_FLAGS -DGGML_CPU_GENERIC)
 diff --git a/ggml/src/ggml-cpu/arch-fallback.h b/ggml/src/ggml-cpu/arch-fallback.h
-index 41da829..d02ef66 100644
+index 41da829..0cb0341 100644
 --- a/ggml/src/ggml-cpu/arch-fallback.h
 +++ b/ggml/src/ggml-cpu/arch-fallback.h
 @@ -236,9 +236,9 @@
@@ -223,6 +224,24 @@ index 41da829..d02ef66 100644
  #define ggml_vec_dot_nvfp4_q8_0_generic ggml_vec_dot_nvfp4_q8_0
  #define ggml_vec_dot_tq1_0_q8_K_generic ggml_vec_dot_tq1_0_q8_K
  #define ggml_vec_dot_tq2_0_q8_K_generic ggml_vec_dot_tq2_0_q8_K
+@@ -259,7 +259,7 @@
+ #define ggml_gemv_q4_0_4x8_q8_0_generic ggml_gemv_q4_0_4x8_q8_0
+ #define ggml_gemv_q4_0_8x8_q8_0_generic ggml_gemv_q4_0_8x8_q8_0
+ #define ggml_gemv_q2_K_8x8_q8_K_generic ggml_gemv_q2_K_8x8_q8_K
+-#define ggml_gemv_q4_K_8x4_q8_K_generic ggml_gemv_q4_K_8x4_q8_K
++// ggml_gemv_q4_K_8x4_q8_K has VXE2 implementation in arch/s390/repack.cpp
+ #define ggml_gemv_q4_K_8x8_q8_K_generic ggml_gemv_q4_K_8x8_q8_K
+ #define ggml_gemv_q5_K_8x4_q8_K_generic ggml_gemv_q5_K_8x4_q8_K
+ #define ggml_gemv_q5_K_8x8_q8_K_generic ggml_gemv_q5_K_8x8_q8_K
+@@ -275,7 +275,7 @@
+ #define ggml_gemm_q4_0_4x8_q8_0_generic ggml_gemm_q4_0_4x8_q8_0
+ #define ggml_gemm_q4_0_8x8_q8_0_generic ggml_gemm_q4_0_8x8_q8_0
+ #define ggml_gemm_q2_K_8x8_q8_K_generic ggml_gemm_q2_K_8x8_q8_K
+-#define ggml_gemm_q4_K_8x4_q8_K_generic ggml_gemm_q4_K_8x4_q8_K
++// ggml_gemm_q4_K_8x4_q8_K has VXE2 implementation in arch/s390/repack.cpp
+ #define ggml_gemm_q4_K_8x8_q8_K_generic ggml_gemm_q4_K_8x8_q8_K
+ #define ggml_gemm_q5_K_8x4_q8_K_generic ggml_gemm_q5_K_8x4_q8_K
+ #define ggml_gemm_q5_K_8x8_q8_K_generic ggml_gemm_q5_K_8x8_q8_K
 diff --git a/ggml/src/ggml-cpu/arch/s390/quants.c b/ggml/src/ggml-cpu/arch/s390/quants.c
 index 34184ed..8d169c3 100644
 --- a/ggml/src/ggml-cpu/arch/s390/quants.c
@@ -560,6 +579,22 @@ index 3fa1443..aba9ace 100644
  #include "ggml.h"
  
  //
+diff --git a/ggml/src/ggml-cpu/repack.cpp b/ggml/src/ggml-cpu/repack.cpp
+index f18758f..9604ffe 100644
+--- a/ggml/src/ggml-cpu/repack.cpp
++++ b/ggml/src/ggml-cpu/repack.cpp
+@@ -4613,6 +4613,11 @@ static const ggml::cpu::tensor_traits * ggml_repack_get_optimal_repack_type(cons
+                 return &q4_K_8x4_q8_K;
+             }
+         }
++        if (ggml_cpu_has_vxe()) {
++            if (cur->ne[1] % 8 == 0) {
++                return &q4_K_8x4_q8_K;
++            }
++        }
+         if (ggml_cpu_has_riscv_v()) {
+             #if defined __riscv_zvfh
+             switch (__riscv_vlenb() * 8) {
 diff --git a/ggml/src/ggml-cpu/simd-mappings.h b/ggml/src/ggml-cpu/simd-mappings.h
 index 0deda93..37b72ca 100644
 --- a/ggml/src/ggml-cpu/simd-mappings.h
