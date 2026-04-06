@@ -1,7 +1,7 @@
-diff --git i/ggml/src/ggml-cpu/ggml-cpu.c w/ggml/src/ggml-cpu/ggml-cpu.c
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.c b/ggml/src/ggml-cpu/ggml-cpu.c
 index 8b323bd..0c9299b 100644
---- i/ggml/src/ggml-cpu/ggml-cpu.c
-+++ w/ggml/src/ggml-cpu/ggml-cpu.c
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
 @@ -17,7 +17,7 @@
  
  #if defined(_MSC_VER) || defined(__MINGW32__)

@@ -1,12 +1,12 @@
-diff --git i/tests/test-gguf.cpp w/tests/test-gguf.cpp
-index 8ebd16b..f4c2e4b 100644
---- i/tests/test-gguf.cpp
-+++ w/tests/test-gguf.cpp
+diff --git a/tests/test-gguf.cpp b/tests/test-gguf.cpp
+index 8ebd16b..7ebf8cf 100644
+--- a/tests/test-gguf.cpp
++++ b/tests/test-gguf.cpp
 @@ -740,6 +740,7 @@ static std::pair<int, int> test_handcrafted_file(const unsigned int seed) {
          struct gguf_init_params gguf_params = {
              /*no_alloc =*/ false,
              /*ctx      =*/ hft >= offset_has_data ? &ctx : nullptr,
-+	    /*.allow_byteswapping = */ true,
++            /*.allow_byteswapping = */ true,
          };
  
          struct gguf_context * gguf_ctx = gguf_init_from_file_impl(file, gguf_params);
@@ -14,7 +14,7 @@ index 8ebd16b..f4c2e4b 100644
      struct gguf_init_params gguf_params = {
          /*no_alloc =*/ false,
          /*ctx      =*/ only_meta ? nullptr : &ctx_1,
-+	/*.allow_byteswapping = */ true,
++        /*.allow_byteswapping = */ true,
      };
      struct gguf_context * gguf_ctx_1 = gguf_init_from_file_impl(file, gguf_params);
  

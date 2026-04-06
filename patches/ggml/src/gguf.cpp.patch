@@ -1,5 +1,5 @@
 diff --git i/ggml/src/gguf.cpp w/ggml/src/gguf.cpp
-index cbeedf6..de748fc 100644
+index ab3cc97..33ba475 100644
 --- i/ggml/src/gguf.cpp
 +++ w/ggml/src/gguf.cpp
 @@ -225,9 +225,12 @@ struct gguf_context {
@@ -25,33 +25,33 @@ index cbeedf6..de748fc 100644
          nbytes_remain -= nread;
          return nread == size;
      }
-@@ -395,7 +401,7 @@ bool gguf_read_emplace_helper(const struct gguf_reader & gr, std::vector<struct
- }
+@@ -400,7 +406,7 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
+     }
  
- struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_params params) {
--    const struct gguf_reader gr(file);
-+    struct gguf_reader gr(file);
-     struct gguf_context * ctx = new gguf_context;
+     const struct gguf_reader gr(file);
+-    struct gguf_context * ctx = new gguf_context;
++    gguf_context * ctx = new gguf_context;
  
      bool ok = true;
-@@ -429,6 +435,16 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
+ 
+@@ -433,6 +439,16 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
      int64_t n_tensors = 0;
  
      if (ok && gr.read(ctx->version)) {
-+	uint32_t original_version = ctx->version;
++        uint32_t original_version = ctx->version;
 +
-+	if ((params.allow_byteswapping) && ((ctx->version & 0x0000FFFF) == 0) && ((ctx->version & 0xFFFF0000) != 0)) {
-+	    // most likely different endianness, do byteswapping
-+	    gr.do_byteswap = true;
-+	    ctx->needs_byteswap = true;
-+	    ggml_bswap(&(ctx->version));
-+	    GGML_LOG_INFO("%s: Entered byteswapping, corrected version from %" PRIu32 "to new GGUF file version %" PRIu32 "\n", __func__, original_version, ctx->version);
-+	}
++        if ((params.allow_byteswapping) && ((ctx->version & 0x0000FFFF) == 0) && ((ctx->version & 0xFFFF0000) != 0)) {
++            // most likely different endianness, do byteswapping
++            gr.do_byteswap = true;
++            ctx->needs_byteswap = true;
++            ggml_bswap(&(ctx->version));
++            GGML_LOG_INFO("%s: Entered byteswapping, corrected version from %" PRIu32 " to new GGUF file version %" PRIu32 "\n", __func__, original_version, ctx->version);
++        }
 +
          if (ok && ctx->version == 0) {
              GGML_LOG_ERROR("%s: bad GGUF version: %" PRIu32 "\n", __func__, ctx->version);
              ok = false;
-@@ -441,7 +457,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
+@@ -445,7 +461,7 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
           * the last 4 hexadecimal digits to check if the model is the same
           * endianness as the host system.
          */
@@ -60,7 +60,7 @@ index cbeedf6..de748fc 100644
              GGML_LOG_ERROR("%s: failed to load model: this GGUF file version %" PRIu32 " is extremely large, is there a mismatch between the host and model endianness?\n", __func__, ctx->version);
              ok = false;
          }
-@@ -1541,3 +1557,7 @@ void gguf_get_meta_data(const struct gguf_context * ctx, void * data) {
+@@ -1554,3 +1570,7 @@ void gguf_get_meta_data(const struct gguf_context * ctx, void * data) {
      gguf_write_to_buf(ctx, buf, /*only_meta =*/ true);
      memcpy(data, buf.data(), buf.size());
  }

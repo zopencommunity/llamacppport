@@ -1,0 +1,220 @@
+diff --git a/ggml/src/ggml-cpu/arch/s390/quants.c b/ggml/src/ggml-cpu/arch/s390/quants.c
+index 34184ed..fefa5f1 100644
+--- a/ggml/src/ggml-cpu/arch/s390/quants.c
++++ b/ggml/src/ggml-cpu/arch/s390/quants.c
+@@ -144,6 +144,66 @@ void quantize_row_q8_1(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, i
+ }
+ 
+ 
++void quantize_row_q8_K(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, int64_t k) {
++    assert(k % QK_K == 0);
++    const int64_t nb = k / QK_K;
++
++    block_q8_K * GGML_RESTRICT y = vy;
++
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (int64_t i = 0; i < nb; i++) {
++        const float * src = x + i * QK_K;
++
++        // Find max and amax (scalar, matches reference behavior exactly)
++        float max = 0;
++        float amax = 0;
++        for (int j = 0; j < QK_K; ++j) {
++            float ax = fabsf(src[j]);
++            if (ax > amax) {
++                amax = ax; max = src[j];
++            }
++        }
++
++        if (!amax) {
++            y[i].d = 0;
++            memset(y[i].qs, 0, QK_K);
++            memset(y[i].bsums, 0, QK_K/16 * sizeof(int16_t));
++            continue;
++        }
++
++        const float iscale = -127.f / max;
++        y[i].d = 1.f / iscale;
++
++        const float32x4_t vscale = vec_splats(iscale);
++
++        // Quantize in groups of 16 and compute block sums
++        // QK_K/16 = 16 groups, each group = 4 vectors of 4 floats
++        for (int g = 0; g < QK_K/16; g++) {
++            int32x4_t acc = vec_splats(0);
++
++            for (int j = 0; j < 4; j++) {
++                const float32x4_t v = vec_mul(vec_xl(0, src + g*16 + 4*j), vscale);
++                const int32x4_t vi = vec_signed(__builtin_s390_vfisb(v, 4, 1));
++
++                y[i].qs[g*16 + 4*j + 0] = MIN(127, vec_extract(vi, 0));
++                y[i].qs[g*16 + 4*j + 1] = MIN(127, vec_extract(vi, 1));
++                y[i].qs[g*16 + 4*j + 2] = MIN(127, vec_extract(vi, 2));
++                y[i].qs[g*16 + 4*j + 3] = MIN(127, vec_extract(vi, 3));
++
++                acc = vec_add(acc, vi);
++            }
++
++            y[i].bsums[g] = vec_extract(acc, 0) + vec_extract(acc, 1) +
++                            vec_extract(acc, 2) + vec_extract(acc, 3);
++        }
++    }
++#else
++    GGML_UNUSED(nb);
++    // scalar
++    quantize_row_q8_K_ref(x, y, k);
++#endif
++}
++
+ //===================================== Dot products =================================
+ 
+ void ggml_vec_dot_q4_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+@@ -874,6 +934,16 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+         const float d = y[i].d * GGML_CPU_FP16_TO_FP32(x[i].d);
+         const float dmin = y[i].d * GGML_CPU_FP16_TO_FP32(x[i].dmin);
+ 
++        // Prefetch: 2-ahead for L2, 1-ahead for L1
++        if (i + 2 < nb) {
++            __builtin_prefetch(x[i+2].qs, 0, 0);
++            __builtin_prefetch(y[i+2].qs, 0, 0);
++        }
++        if (i + 1 < nb) {
++            __builtin_prefetch(x[i+1].qs, 0, 1);
++            __builtin_prefetch(y[i+1].qs, 0, 1);
++        }
++
+         const int16x8_t v_ysumsl = vec_xl(0 , y[i].bsums);
+         const int16x8_t v_ysumsh = vec_xl(16, y[i].bsums);
+         const int16x8_t v_ysums = vec_padd_s16(v_ysumsl, v_ysumsh);
+@@ -897,8 +967,9 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+         const uint8_t * GGML_RESTRICT x0 = x[i].qs;
+         const int8_t  * GGML_RESTRICT y0 = y[i].qs;
+ 
+-        int32_t sumi1 = 0;
+-        int32_t sumi2 = 0;
++        // Dual accumulators to break dependency chain and improve ILP
++        int32x4_t v_acc0 = v_z;
++        int32x4_t v_acc1 = v_z;
+ 
+         for (int j = 0; j < QK_K/64; ++j) {
+             v_x[0] = vec_xl(0 , x0);
+@@ -913,7 +984,7 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+             v_xl[1] = (int8x16_t)vec_and(v_x[1], v_lm);
+ 
+             const int32x4_t p1 = ggml_vec_dot(ggml_vec_dot(v_z, v_xl[0], v_y[0]), v_xl[1], v_y[1]);
+-            sumi1 += vec_hsum_i32x4(p1) * scales[2*j+0];
++            v_acc0 = vec_add(v_acc0, vec_mul(p1, vec_splats((int32_t)scales[2*j+0])));
+ 
+             v_y[0] = vec_xl(0 , y0);
+             v_y[1] = vec_xl(16, y0);
+@@ -923,10 +994,10 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+             v_xl[1] = (int8x16_t)vec_sr(v_x[1], 4);
+ 
+             const int32x4_t p2 = ggml_vec_dot(ggml_vec_dot(v_z, v_xl[0], v_y[0]), v_xl[1], v_y[1]);
+-            sumi2 += vec_hsum_i32x4(p2) * scales[2*j+1];
++            v_acc1 = vec_add(v_acc1, vec_mul(p2, vec_splats((int32_t)scales[2*j+1])));
+         }
+ 
+-        sumf += d * (sumi1 + sumi2);
++        sumf += d * vec_hsum_i32x4(vec_add(v_acc0, v_acc1));
+     }
+ 
+     *s = sumf;
+@@ -1014,7 +1085,19 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+         v_xh[0] = vec_xl(0 , x0h);
+         v_xh[1] = vec_xl(16, x0h);
+ 
+-        int32_t sumi = 0;
++        // Prefetch: 2-ahead for L2, 1-ahead for L1
++        if (i + 2 < nb) {
++            __builtin_prefetch(x[i+2].qs, 0, 0);
++            __builtin_prefetch(y[i+2].qs, 0, 0);
++        }
++        if (i + 1 < nb) {
++            __builtin_prefetch(x[i+1].qs, 0, 1);
++            __builtin_prefetch(y[i+1].qs, 0, 1);
++        }
++
++        // Dual accumulators to break dependency chain and improve ILP
++        int32x4_t v_acc0 = v_z;
++        int32x4_t v_acc1 = v_z;
+         for (int j = 0; j < QK_K/64; ++j) {
+             v_xl[0] = vec_xl(0 , x0l);
+             v_xl[1] = vec_xl(16, x0l);
+@@ -1041,11 +1124,11 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+             int32x4_t sumi0 = ggml_vec_dot(ggml_vec_dot(v_z, q5b[0], v_y[0]), q5b[1], v_y[1]);
+             int32x4_t sumi1 = ggml_vec_dot(ggml_vec_dot(v_z, q5b[2], v_y[2]), q5b[3], v_y[3]);
+ 
+-            sumi += vec_hsum_i32x4(sumi0) * *scales++;
+-            sumi += vec_hsum_i32x4(sumi1) * *scales++;
++            v_acc0 = vec_add(v_acc0, vec_mul(sumi0, vec_splats((int32_t)*scales++)));
++            v_acc1 = vec_add(v_acc1, vec_mul(sumi1, vec_splats((int32_t)*scales++)));
+         }
+ 
+-        sumf += d * sumi - dmin * mins;
++        sumf += d * vec_hsum_i32x4(vec_add(v_acc0, v_acc1)) - dmin * mins;
+     }
+ 
+     *s = sumf;
+@@ -1115,7 +1198,20 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+ 
+         const int32_t mins = vec_hsum_i32x4(v_mins);
+ 
+-        int32_t isum = 0;
++        // Prefetch: 2-ahead for L2, 1-ahead for L1
++        if (i + 2 < nb) {
++            __builtin_prefetch(x[i+2].ql, 0, 0);
++            __builtin_prefetch(y[i+2].qs, 0, 0);
++        }
++        if (i + 1 < nb) {
++            __builtin_prefetch(x[i+1].ql, 0, 1);
++            __builtin_prefetch(y[i+1].qs, 0, 1);
++        }
++
++        // Dual accumulators to break dependency chain and improve ILP
++        int32x4_t v_acc0 = v_z;
++        int32x4_t v_acc1 = v_z;
++
+         for (int j = 0; j < QK_K/128; ++j) {
+             // Load model upper 2 bits
+             v_xh[0] = vec_xl(0 , x0h);
+@@ -1153,14 +1249,13 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+             int32x4_t summs2 = ggml_vec_dot(v_z, q6b[2], v_y[2]);
+             int32x4_t summs3 = ggml_vec_dot(v_z, q6b[3], v_y[3]);
+ 
+-            isum += vec_hsum_i32x4(summs0) * scale[0] +
+-                    vec_hsum_i32x4(summs1) * scale[1] +
+-                    vec_hsum_i32x4(summs2) * scale[2] +
+-                    vec_hsum_i32x4(summs3) * scale[3];
++            v_acc0 = vec_add(v_acc0, vec_mul(summs0, vec_splats((int32_t)scale[0])));
++            v_acc0 = vec_add(v_acc0, vec_mul(summs1, vec_splats((int32_t)scale[1])));
++            v_acc1 = vec_add(v_acc1, vec_mul(summs2, vec_splats((int32_t)scale[2])));
++            v_acc1 = vec_add(v_acc1, vec_mul(summs3, vec_splats((int32_t)scale[3])));
+ 
+             scale += 4;
+ 
+-
+             // Load activation quants
+             v_y[0] = vec_xl(0 , y0);
+             v_y[1] = vec_xl(16, y0);
+@@ -1187,15 +1282,15 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const voi
+             summs2 = ggml_vec_dot(v_z, q6b[2], v_y[2]);
+             summs3 = ggml_vec_dot(v_z, q6b[3], v_y[3]);
+ 
+-            isum += vec_hsum_i32x4(summs0) * scale[0] +
+-                    vec_hsum_i32x4(summs1) * scale[1] +
+-                    vec_hsum_i32x4(summs2) * scale[2] +
+-                    vec_hsum_i32x4(summs3) * scale[3];
++            v_acc0 = vec_add(v_acc0, vec_mul(summs0, vec_splats((int32_t)scale[0])));
++            v_acc0 = vec_add(v_acc0, vec_mul(summs1, vec_splats((int32_t)scale[1])));
++            v_acc1 = vec_add(v_acc1, vec_mul(summs2, vec_splats((int32_t)scale[2])));
++            v_acc1 = vec_add(v_acc1, vec_mul(summs3, vec_splats((int32_t)scale[3])));
+ 
+             scale += 4;
+         }
+ 
+-        sum += d_all * y[i].d * (isum - 32 * mins);
++        sum += d_all * y[i].d * (vec_hsum_i32x4(vec_add(v_acc0, v_acc1)) - 32 * mins);
+     }
+ 
+     *s = sum;

@@ -1,7 +1,24 @@
-diff --git i/ggml/src/ggml-cpu/ggml-cpu-impl.h w/ggml/src/ggml-cpu/ggml-cpu-impl.h
-index 88a9c9e..26439bc 100644
---- i/ggml/src/ggml-cpu/ggml-cpu-impl.h
-+++ w/ggml/src/ggml-cpu/ggml-cpu-impl.h
+diff --git a/ggml/src/ggml-cpu/ggml-cpu-impl.h b/ggml/src/ggml-cpu/ggml-cpu-impl.h
+index 88a9c9e..cc21b08 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu-impl.h
++++ b/ggml/src/ggml-cpu/ggml-cpu-impl.h
+@@ -62,14 +62,14 @@ struct ggml_compute_params {
+ #endif
+ #endif
+ 
+-#if defined(__s390x__) && defined(__VEC__)
++#if (defined(__s390x__) || defined(__MVS__)) && defined(__VEC__)
+ #ifndef __VXE__
+ #define __VXE__
+ #endif  // __VXE__
+ #ifndef __VXE2__
+ #define __VXE2__
+ #endif  // __VXE2__
+-#endif  // __s390x__ && __VEC__
++#endif  // (__s390x__ || __MVS__) && __VEC__
+ 
+ #if defined(__ARM_FEATURE_SVE) && defined(__linux__)
+ #include <sys/prctl.h>
 @@ -349,8 +349,9 @@ inline static int32x4_t ggml_vdotq_s32(int32x4_t acc, int8x16_t a, int8x16_t b)
  #endif
  

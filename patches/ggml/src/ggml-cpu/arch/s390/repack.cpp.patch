@@ -1,0 +1,354 @@
+diff --git a/ggml/src/ggml-cpu/arch/s390/repack.cpp b/ggml/src/ggml-cpu/arch/s390/repack.cpp
+new file mode 100644
+index 0000000..bf5bec5
+--- /dev/null
++++ b/ggml/src/ggml-cpu/arch/s390/repack.cpp
+@@ -0,0 +1,348 @@
++#define GGML_COMMON_IMPL_CPP
++#define GGML_COMMON_DECL_CPP
++#include "ggml-common.h"
++#include "ggml-backend-impl.h"
++
++#include "ggml-impl.h"
++#include "ggml-cpu.h"
++#include "ggml-cpu-impl.h"
++#include "simd-mappings.h"
++#include "traits.h"
++
++#include <cmath>
++#include <cstring>
++#include <cassert>
++#include <cstdlib>
++#include <cstdio>
++
++#include "../../repack.h"
++
++#define UNUSED GGML_UNUSED
++
++#if defined(__VXE__) || defined(__VXE2__)
++
++// Column-wise dot product: computes 4 dot products of 4 elements each.
++// Input a = [c0e0..c0e3, c1e0..c1e3, c2e0..c2e3, c3e0..c3e3] (16 bytes, 4 cols x 4 elems)
++// Input b = [q0,q1,q2,q3, q0,q1,q2,q3, q0,q1,q2,q3, q0,q1,q2,q3] (broadcast Q8)
++// Returns int32x4 = [col0_dot, col1_dot, col2_dot, col3_dot]
++static inline int32x4_t ggml_vec_dot_col4(int32x4_t acc, int8x16_t a, int8x16_t b) {
++    const int16x8_t ones = vec_splats((int16_t)1);
++    const int16x8_t p = vec_add(vec_mule(a, b), vec_mulo(a, b));
++    return vec_add(acc, vec_add(vec_mule(p, ones), vec_mulo(p, ones)));
++}
++
++void ggml_gemv_q4_K_8x4_q8_K(int n, float * GGML_RESTRICT s, size_t bs,
++    const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
++
++    const int nb = n / QK_K;
++    static const uint32_t kmask1 = 0x3f3f3f3f;
++    static const uint32_t kmask2 = 0x0f0f0f0f;
++    static const uint32_t kmask3 = 0x03030303;
++
++    assert(n % QK_K == 0);
++    assert(nc % 8 == 0);
++
++    UNUSED(bs);
++    UNUSED(nr);
++
++    const uint8x16_t mask_0f = vec_splats((uint8_t)0x0F);
++    const int32x4_t v_z = vec_splats((int32_t)0);
++
++    // Broadcast permute: replicate first 4 bytes to fill 16 bytes
++    static const uint8_t bcast4_data[16] = {0,1,2,3, 0,1,2,3, 0,1,2,3, 0,1,2,3};
++    const uint8x16_t bcast4 = vec_xl(0, bcast4_data);
++
++    uint32_t utmp[32];
++    const block_q8_K * a_ptr = (const block_q8_K *)vy;
++
++    for (int x = 0; x < nc / 8; x++) {
++        const block_q4_Kx8 * b_ptr = (const block_q4_Kx8 *)vx + (x * nb);
++
++        float32x4_t sumf_lo = vec_splats(0.0f);  // cols 0-3
++        float32x4_t sumf_hi = vec_splats(0.0f);  // cols 4-7
++
++        for (int l = 0; l < nb; l++) {
++            const float a_d = a_ptr[l].d;
++
++            // Decode scales for all 8 sub-blocks
++            for (int sb = 0; sb < 8; sb++) {
++                memcpy(utmp + sb*4, b_ptr[l].scales + sb*12, 12);
++                utmp[sb*4+3] = ((utmp[sb*4+2] >> 4) & kmask2) | (((utmp[sb*4+1] >> 6) & kmask3) << 4);
++                const uint32_t uaux = utmp[sb*4+1] & kmask1;
++                utmp[sb*4+1] = (utmp[sb*4+2] & kmask2) | (((utmp[sb*4+0] >> 6) & kmask3) << 4);
++                utmp[sb*4+2] = uaux;
++                utmp[sb*4+0] &= kmask1;
++            }
++
++            // Main dot product loop: 4 scale groups, 8 k-iterations each
++            int32x4_t int_acc_lo = v_z;
++            int32x4_t int_acc_hi = v_z;
++
++            for (int sg = 0; sg < 4; sg++) {
++                const uint8_t * sc_base = (const uint8_t *)utmp + sg * 32;
++
++                // Load and widen scales for cols 0-3 and 4-7
++                // sc_base[0..7] = low nibble scales for 8 cols
++                // sc_base+16[0..7] = high nibble scales for 8 cols
++                int16x8_t sc0_16 = (int16x8_t)vec_unpackh((int8x16_t)vec_xl(0, sc_base));
++                int32x4_t sc0_lo = vec_unpackh(sc0_16);  // cols 0-3
++                int32x4_t sc0_hi = vec_unpackl(sc0_16);  // cols 4-7
++
++                int16x8_t sc1_16 = (int16x8_t)vec_unpackh((int8x16_t)vec_xl(0, sc_base + 16));
++                int32x4_t sc1_lo = vec_unpackh(sc1_16);
++                int32x4_t sc1_hi = vec_unpackl(sc1_16);
++
++                // Accumulate raw dot products for 8 k-iterations
++                int32x4_t raw_lo_lo = v_z, raw_lo_hi = v_z;  // low nibble
++                int32x4_t raw_hi_lo = v_z, raw_hi_hi = v_z;  // high nibble
++
++                for (int kk = 0; kk < 8; kk++) {
++                    const int k = sg * 8 + kk;
++
++                    // Load Q4 data: 32 bytes = 8 cols x 4 elements
++                    uint8x16_t q4_0 = vec_xl(0,  b_ptr[l].qs + k * 32);       // cols 0-3
++                    uint8x16_t q4_1 = vec_xl(16, b_ptr[l].qs + k * 32);       // cols 4-7
++
++                    int8x16_t q4_lo_0 = (int8x16_t)vec_and(q4_0, mask_0f);
++                    int8x16_t q4_hi_0 = (int8x16_t)vec_sr(q4_0, vec_splats((uint8_t)4));
++                    int8x16_t q4_lo_1 = (int8x16_t)vec_and(q4_1, mask_0f);
++                    int8x16_t q4_hi_1 = (int8x16_t)vec_sr(q4_1, vec_splats((uint8_t)4));
++
++                    // Load Q8 and broadcast 4 bytes to fill 16 bytes
++                    int8x16_t q8_lo_raw = vec_xl(0, a_ptr[l].qs + sg * 64 + kk * 4);
++                    int8x16_t q8_lo = vec_perm(q8_lo_raw, q8_lo_raw, bcast4);
++
++                    int8x16_t q8_hi_raw = vec_xl(0, a_ptr[l].qs + sg * 64 + kk * 4 + 32);
++                    int8x16_t q8_hi = vec_perm(q8_hi_raw, q8_hi_raw, bcast4);
++
++                    // Column-wise dot products (4 cols per vector op)
++                    raw_lo_lo = ggml_vec_dot_col4(raw_lo_lo, q4_lo_0, q8_lo);
++                    raw_lo_hi = ggml_vec_dot_col4(raw_lo_hi, q4_lo_1, q8_lo);
++                    raw_hi_lo = ggml_vec_dot_col4(raw_hi_lo, q4_hi_0, q8_hi);
++                    raw_hi_hi = ggml_vec_dot_col4(raw_hi_hi, q4_hi_1, q8_hi);
++                }
++
++                // Apply per-column scales
++                int_acc_lo = vec_add(int_acc_lo, vec_add(vec_mul(raw_lo_lo, sc0_lo), vec_mul(raw_hi_lo, sc1_lo)));
++                int_acc_hi = vec_add(int_acc_hi, vec_add(vec_mul(raw_lo_hi, sc0_hi), vec_mul(raw_hi_hi, sc1_hi)));
++            }
++
++            // Load d[0..7] as fp32
++            float d_vals[8];
++            for (int j = 0; j < 8; j++) {
++                d_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].d[j]);
++            }
++            float32x4_t d_lo = vec_xl(0, d_vals);
++            float32x4_t d_hi = vec_xl(0, d_vals + 4);
++            float32x4_t v_ad = vec_splats(a_d);
++
++            sumf_lo = vec_add(sumf_lo, vec_mul(vec_mul(vec_float(int_acc_lo), d_lo), v_ad));
++            sumf_hi = vec_add(sumf_hi, vec_mul(vec_mul(vec_float(int_acc_hi), d_hi), v_ad));
++
++            // Mins correction
++            int32x4_t int_min_lo = v_z;
++            int32x4_t int_min_hi = v_z;
++
++            for (int sb = 0; sb < 8; sb++) {
++                // mins are at offset 8 within each 16-byte decoded sub-block
++                int16x8_t v_mins_16 = (int16x8_t)vec_unpackh((int8x16_t)vec_xl(0, (const uint8_t *)utmp + 8 + sb * 16));
++                int32x4_t v_mins_lo = vec_unpackh(v_mins_16);
++                int32x4_t v_mins_hi = vec_unpackl(v_mins_16);
++
++                int32_t bsum = (int32_t)a_ptr[l].bsums[sb * 2] + (int32_t)a_ptr[l].bsums[sb * 2 + 1];
++                int32x4_t v_bsum = vec_splats(bsum);
++
++                int_min_lo = vec_add(int_min_lo, vec_mul(v_mins_lo, v_bsum));
++                int_min_hi = vec_add(int_min_hi, vec_mul(v_mins_hi, v_bsum));
++            }
++
++            // Load dmin[0..7] as fp32
++            float dmin_vals[8];
++            for (int j = 0; j < 8; j++) {
++                dmin_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].dmin[j]);
++            }
++            float32x4_t dmin_lo = vec_xl(0, dmin_vals);
++            float32x4_t dmin_hi = vec_xl(0, dmin_vals + 4);
++
++            sumf_lo = vec_sub(sumf_lo, vec_mul(vec_mul(vec_float(int_min_lo), dmin_lo), v_ad));
++            sumf_hi = vec_sub(sumf_hi, vec_mul(vec_mul(vec_float(int_min_hi), dmin_hi), v_ad));
++        }
++
++        vec_xst(sumf_lo, 0, s + x * 8);
++        vec_xst(sumf_hi, 0, s + x * 8 + 4);
++    }
++}
++
++void ggml_gemm_q4_K_8x4_q8_K(int n, float * GGML_RESTRICT s, size_t bs,
++    const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
++
++    const int nb = n / QK_K;
++    static const uint32_t kmask1 = 0x3f3f3f3f;
++    static const uint32_t kmask2 = 0x0f0f0f0f;
++    static const uint32_t kmask3 = 0x03030303;
++
++    assert(n % QK_K == 0);
++    assert(nr % 4 == 0);
++    assert(nc % 8 == 0);
++
++    const uint8x16_t mask_0f = vec_splats((uint8_t)0x0F);
++    const int32x4_t v_z = vec_splats((int32_t)0);
++
++    // Broadcast permute masks: replicate each row's 4 bytes across 16 bytes
++    static const uint8_t bcast_r0_data[16] = { 0, 1, 2, 3,  0, 1, 2, 3,  0, 1, 2, 3,  0, 1, 2, 3};
++    static const uint8_t bcast_r1_data[16] = { 4, 5, 6, 7,  4, 5, 6, 7,  4, 5, 6, 7,  4, 5, 6, 7};
++    static const uint8_t bcast_r2_data[16] = { 8, 9,10,11,  8, 9,10,11,  8, 9,10,11,  8, 9,10,11};
++    static const uint8_t bcast_r3_data[16] = {12,13,14,15, 12,13,14,15, 12,13,14,15, 12,13,14,15};
++    const uint8x16_t bcast_r0 = vec_xl(0, bcast_r0_data);
++    const uint8x16_t bcast_r1 = vec_xl(0, bcast_r1_data);
++    const uint8x16_t bcast_r2 = vec_xl(0, bcast_r2_data);
++    const uint8x16_t bcast_r3 = vec_xl(0, bcast_r3_data);
++
++    uint32_t utmp[32];
++
++    for (int y = 0; y < nr / 4; y++) {
++        const block_q8_Kx4 * a_ptr = (const block_q8_Kx4 *)vy + (y * nb);
++
++        for (int x = 0; x < nc / 8; x++) {
++            const block_q4_Kx8 * b_ptr = (const block_q4_Kx8 *)vx + (x * nb);
++
++            // 4 rows x 2 col groups = 8 float accumulators
++            float32x4_t sumf[4][2];
++            for (int m = 0; m < 4; m++) {
++                sumf[m][0] = vec_splats(0.0f);
++                sumf[m][1] = vec_splats(0.0f);
++            }
++
++            for (int l = 0; l < nb; l++) {
++                // Decode scales
++                for (int sb = 0; sb < 8; sb++) {
++                    memcpy(utmp + sb*4, b_ptr[l].scales + sb*12, 12);
++                    utmp[sb*4+3] = ((utmp[sb*4+2] >> 4) & kmask2) | (((utmp[sb*4+1] >> 6) & kmask3) << 4);
++                    const uint32_t uaux = utmp[sb*4+1] & kmask1;
++                    utmp[sb*4+1] = (utmp[sb*4+2] & kmask2) | (((utmp[sb*4+0] >> 6) & kmask3) << 4);
++                    utmp[sb*4+2] = uaux;
++                    utmp[sb*4+0] &= kmask1;
++                }
++
++                // Load d[0..7] and dmin[0..7] as fp32
++                float d_vals[8], dmin_vals[8];
++                for (int j = 0; j < 8; j++) {
++                    d_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].d[j]);
++                    dmin_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].dmin[j]);
++                }
++                float32x4_t d_lo = vec_xl(0, d_vals);
++                float32x4_t d_hi = vec_xl(0, d_vals + 4);
++                float32x4_t dmin_lo = vec_xl(0, dmin_vals);
++                float32x4_t dmin_hi = vec_xl(0, dmin_vals + 4);
++
++                // Process 4 rows
++                for (int m = 0; m < 4; m++) {
++                    const float a_d = a_ptr[l].d[m];
++                    float32x4_t v_ad = vec_splats(a_d);
++
++                    int32x4_t int_acc_lo = v_z;
++                    int32x4_t int_acc_hi = v_z;
++
++                    for (int sg = 0; sg < 4; sg++) {
++                        const uint8_t * sc_base = (const uint8_t *)utmp + sg * 32;
++
++                        int16x8_t sc0_16 = (int16x8_t)vec_unpackh((int8x16_t)vec_xl(0, sc_base));
++                        int32x4_t sc0_lo = vec_unpackh(sc0_16);
++                        int32x4_t sc0_hi = vec_unpackl(sc0_16);
++
++                        int16x8_t sc1_16 = (int16x8_t)vec_unpackh((int8x16_t)vec_xl(0, sc_base + 16));
++                        int32x4_t sc1_lo = vec_unpackh(sc1_16);
++                        int32x4_t sc1_hi = vec_unpackl(sc1_16);
++
++                        int32x4_t raw_lo_lo = v_z, raw_lo_hi = v_z;
++                        int32x4_t raw_hi_lo = v_z, raw_hi_hi = v_z;
++
++                        // Select the broadcast mask for this row
++                        const uint8x16_t bcast_m = (m == 0) ? bcast_r0 :
++                                                    (m == 1) ? bcast_r1 :
++                                                    (m == 2) ? bcast_r2 : bcast_r3;
++
++                        for (int kk = 0; kk < 8; kk++) {
++                            const int k = sg * 8 + kk;
++
++                            uint8x16_t q4_0 = vec_xl(0,  b_ptr[l].qs + k * 32);
++                            uint8x16_t q4_1 = vec_xl(16, b_ptr[l].qs + k * 32);
++
++                            int8x16_t q4_lo_0 = (int8x16_t)vec_and(q4_0, mask_0f);
++                            int8x16_t q4_hi_0 = (int8x16_t)vec_sr(q4_0, vec_splats((uint8_t)4));
++                            int8x16_t q4_lo_1 = (int8x16_t)vec_and(q4_1, mask_0f);
++                            int8x16_t q4_hi_1 = (int8x16_t)vec_sr(q4_1, vec_splats((uint8_t)4));
++
++                            // Q8 data: offset = sg*256 + kk*16 + m*4 (low), +128 (high)
++                            // Load 16 bytes containing all 4 rows, broadcast this row's 4 bytes
++                            int8x16_t q8_all_lo = vec_xl(0, a_ptr[l].qs + sg * 256 + kk * 16);
++                            int8x16_t q8_lo = vec_perm(q8_all_lo, q8_all_lo, bcast_m);
++
++                            int8x16_t q8_all_hi = vec_xl(0, a_ptr[l].qs + sg * 256 + 128 + kk * 16);
++                            int8x16_t q8_hi = vec_perm(q8_all_hi, q8_all_hi, bcast_m);
++
++                            raw_lo_lo = ggml_vec_dot_col4(raw_lo_lo, q4_lo_0, q8_lo);
++                            raw_lo_hi = ggml_vec_dot_col4(raw_lo_hi, q4_lo_1, q8_lo);
++                            raw_hi_lo = ggml_vec_dot_col4(raw_hi_lo, q4_hi_0, q8_hi);
++                            raw_hi_hi = ggml_vec_dot_col4(raw_hi_hi, q4_hi_1, q8_hi);
++                        }
++
++                        int_acc_lo = vec_add(int_acc_lo, vec_add(vec_mul(raw_lo_lo, sc0_lo), vec_mul(raw_hi_lo, sc1_lo)));
++                        int_acc_hi = vec_add(int_acc_hi, vec_add(vec_mul(raw_lo_hi, sc0_hi), vec_mul(raw_hi_hi, sc1_hi)));
++                    }
++
++                    sumf[m][0] = vec_add(sumf[m][0], vec_mul(vec_mul(vec_float(int_acc_lo), d_lo), v_ad));
++                    sumf[m][1] = vec_add(sumf[m][1], vec_mul(vec_mul(vec_float(int_acc_hi), d_hi), v_ad));
++
++                    // Mins correction for this row
++                    int32x4_t int_min_lo = v_z;
++                    int32x4_t int_min_hi = v_z;
++
++                    for (int sb = 0; sb < 8; sb++) {
++                        int16x8_t v_mins_16 = (int16x8_t)vec_unpackh((int8x16_t)vec_xl(0, (const uint8_t *)utmp + 8 + sb * 16));
++                        int32x4_t v_mins_lo = vec_unpackh(v_mins_16);
++                        int32x4_t v_mins_hi = vec_unpackl(v_mins_16);
++
++                        const int16_t * bsums = a_ptr[l].bsums + (sb * 8) + (m * 4) - ((sb % 2) * 6);
++                        int32_t bsum = (int32_t)bsums[0] + (int32_t)bsums[1];
++                        int32x4_t v_bsum = vec_splats(bsum);
++
++                        int_min_lo = vec_add(int_min_lo, vec_mul(v_mins_lo, v_bsum));
++                        int_min_hi = vec_add(int_min_hi, vec_mul(v_mins_hi, v_bsum));
++                    }
++
++                    sumf[m][0] = vec_sub(sumf[m][0], vec_mul(vec_mul(vec_float(int_min_lo), dmin_lo), v_ad));
++                    sumf[m][1] = vec_sub(sumf[m][1], vec_mul(vec_mul(vec_float(int_min_hi), dmin_hi), v_ad));
++                }
++            }
++
++            // Store results: s[(y*4+m) * bs + x*8 + j]
++            for (int m = 0; m < 4; m++) {
++                vec_xst(sumf[m][0], 0, s + (y * 4 + m) * bs + x * 8);
++                vec_xst(sumf[m][1], 0, s + (y * 4 + m) * bs + x * 8 + 4);
++            }
++        }
++    }
++}
++
++#else
++// No VXE2: fall back to generic implementations
++
++extern "C" {
++void ggml_gemv_q4_K_8x4_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs,
++    const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc);
++void ggml_gemm_q4_K_8x4_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs,
++    const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc);
++}
++
++void ggml_gemv_q4_K_8x4_q8_K(int n, float * GGML_RESTRICT s, size_t bs,
++    const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
++    ggml_gemv_q4_K_8x4_q8_K_generic(n, s, bs, vx, vy, nr, nc);
++}
++
++void ggml_gemm_q4_K_8x4_q8_K(int n, float * GGML_RESTRICT s, size_t bs,
++    const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
++    ggml_gemm_q4_K_8x4_q8_K_generic(n, s, bs, vx, vy, nr, nc);
++}
++
++#endif // __VXE__ || __VXE2__

@@ -1,10 +1,366 @@
-diff --git i/ggml/src/ggml-cpu/vec.h w/ggml/src/ggml-cpu/vec.h
-index 3198b33..eca82b0 100644
---- i/ggml/src/ggml-cpu/vec.h
-+++ w/ggml/src/ggml-cpu/vec.h
-@@ -1,4 +1,5 @@
- // Vectorized functions for fundamental operations
-+#include <mass.h>
+diff --git a/ggml/src/ggml-cpu/vec.h b/ggml/src/ggml-cpu/vec.h
+index 3198b33..dcd2982 100644
+--- a/ggml/src/ggml-cpu/vec.h
++++ b/ggml/src/ggml-cpu/vec.h
+@@ -7,6 +7,10 @@
+ #include "ggml.h"
+ #include "ggml-cpu.h"
  
- #pragma once
++#if defined(GGML_USE_MASS)
++#include <massv.h>
++#endif
++
+ #if defined(GGML_USE_ACCELERATE)
+ #include <Accelerate/Accelerate.h>
+ #endif
+@@ -66,6 +70,14 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
+         __m256 vz = _mm256_add_ps(vx, vy);
+         _mm256_storeu_ps(z + i, vz);
+     }
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 7 < n; i += 8) {
++        vec_xst(vec_add(vec_xl(0, x + i),     vec_xl(0, y + i)),     0, z + i);
++        vec_xst(vec_add(vec_xl(0, x + i + 4), vec_xl(0, y + i + 4)), 0, z + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_add(vec_xl(0, x + i), vec_xl(0, y + i)), 0, z + i);
++    }
+ #endif
+     for (; i < n; ++i) {
+         z[i] = x[i] + y[i];
+@@ -73,37 +85,148 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
+ }
  
+ inline static void ggml_vec_add_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        float32x4_t vy = __lzs_f16cx4_load(y + i);
++        __lzs_f16cx4_store(z + i, vec_add(vx, vy));
++    }
++#endif
++    for (; i < n; ++i) {
+         z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) + GGML_CPU_FP16_TO_FP32(y[i]));
+     }
+ }
+ inline static void ggml_vec_add1_f32(const int n, float * z, const float * x, const float   v) { for (int i = 0; i < n; ++i) z[i]  = x[i] + v;    }
+-inline static void ggml_vec_acc_f32 (const int n, float * y, const float * x)                  { for (int i = 0; i < n; ++i) y[i] += x[i];        }
++inline static void ggml_vec_acc_f32 (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 7 < n; i += 8) {
++        vec_xst(vec_add(vec_xl(0, y + i),     vec_xl(0, x + i)),     0, y + i);
++        vec_xst(vec_add(vec_xl(0, y + i + 4), vec_xl(0, x + i + 4)), 0, y + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_add(vec_xl(0, y + i), vec_xl(0, x + i)), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] += x[i];
++    }
++}
+ inline static void ggml_vec_acc1_f32(const int n, float * y, const float   v)                  { for (int i = 0; i < n; ++i) y[i] += v;           }
+-inline static void ggml_vec_sub_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i] - y[i]; }
++inline static void ggml_vec_sub_f32 (const int n, float * z, const float * x, const float * y) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 7 < n; i += 8) {
++        vec_xst(vec_sub(vec_xl(0, x + i),     vec_xl(0, y + i)),     0, z + i);
++        vec_xst(vec_sub(vec_xl(0, x + i + 4), vec_xl(0, y + i + 4)), 0, z + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_sub(vec_xl(0, x + i), vec_xl(0, y + i)), 0, z + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        z[i] = x[i] - y[i];
++    }
++}
+ inline static void ggml_vec_sub_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        float32x4_t vy = __lzs_f16cx4_load(y + i);
++        __lzs_f16cx4_store(z + i, vec_sub(vx, vy));
++    }
++#endif
++    for (; i < n; ++i) {
+         z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) - GGML_CPU_FP16_TO_FP32(y[i]));
+     }
+ }
+ inline static void ggml_vec_set_f32 (const int n, float * x, const float   v)                  { for (int i = 0; i < n; ++i) x[i]  = v;           }
+ inline static void ggml_vec_cpy_f32 (const int n, float * y, const float * x)                  { for (int i = 0; i < n; ++i) y[i]  = x[i];        }
+-inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)                  { for (int i = 0; i < n; ++i) y[i]  = -x[i];       }
++inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    const float32x4_t vzero = vec_splats(0.0f);
++    for (; i + 7 < n; i += 8) {
++        vec_xst(vec_sub(vzero, vec_xl(0, x + i)),     0, y + i);
++        vec_xst(vec_sub(vzero, vec_xl(0, x + i + 4)), 0, y + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_sub(vzero, vec_xl(0, x + i)), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] = -x[i];
++    }
++}
+ inline static void ggml_vec_neg_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    const float32x4_t vzero = vec_splats(0.0f);
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        __lzs_f16cx4_store(y + i, vec_sub(vzero, vx));
++    }
++#endif
++    for (; i < n; ++i) {
+         y[i] = GGML_CPU_FP32_TO_FP16(-GGML_CPU_FP16_TO_FP32(x[i]));
+     }
+ }
+ 
+-inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];   }
++inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 7 < n; i += 8) {
++        vec_xst(vec_mul(vec_xl(0, x + i),     vec_xl(0, y + i)),     0, z + i);
++        vec_xst(vec_mul(vec_xl(0, x + i + 4), vec_xl(0, y + i + 4)), 0, z + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_mul(vec_xl(0, x + i), vec_xl(0, y + i)), 0, z + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        z[i] = x[i]*y[i];
++    }
++}
+ inline static void ggml_vec_mul_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        float32x4_t vy = __lzs_f16cx4_load(y + i);
++        __lzs_f16cx4_store(z + i, vec_mul(vx, vy));
++    }
++#endif
++    for (; i < n; ++i) {
+         z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) * GGML_CPU_FP16_TO_FP32(y[i]));
+     }
+ }
+-inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];   }
++inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 7 < n; i += 8) {
++        vec_xst(vec_div(vec_xl(0, x + i),     vec_xl(0, y + i)),     0, z + i);
++        vec_xst(vec_div(vec_xl(0, x + i + 4), vec_xl(0, y + i + 4)), 0, z + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_div(vec_xl(0, x + i), vec_xl(0, y + i)), 0, z + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        z[i] = x[i]/y[i];
++    }
++}
+ inline static void ggml_vec_div_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        float32x4_t vy = __lzs_f16cx4_load(y + i);
++        __lzs_f16cx4_store(z + i, vec_div(vx, vy));
++    }
++#endif
++    for (; i < n; ++i) {
+         z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) / GGML_CPU_FP16_TO_FP32(y[i]));
+     }
+ }
+@@ -864,16 +987,61 @@ inline static void ggml_vec_scale_f16(const int n, ggml_fp16_t * y, const float
+ }
+ 
+ inline static void ggml_vec_norm_f32 (const int n, float * s, const float * x) { ggml_vec_dot_f32(n, s, 0, x, 0, x, 0, 1); *s = sqrtf(*s);   }
+-inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = x[i]*x[i];   }
++inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 7 < n; i += 8) {
++        float32x4_t vx0 = vec_xl(0, x + i);
++        float32x4_t vx1 = vec_xl(0, x + i + 4);
++        vec_xst(vec_mul(vx0, vx0), 0, y + i);
++        vec_xst(vec_mul(vx1, vx1), 0, y + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = vec_xl(0, x + i);
++        vec_xst(vec_mul(vx, vx), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] = x[i]*x[i];
++    }
++}
+ inline static void ggml_vec_sqr_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        __lzs_f16cx4_store(y + i, vec_mul(vx, vx));
++    }
++#endif
++    for (; i < n; ++i) {
+         float v = GGML_CPU_FP16_TO_FP32(x[i]);
+         y[i] = GGML_CPU_FP32_TO_FP16(v*v);
+     }
+ }
+-inline static void ggml_vec_sqrt_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = sqrtf(x[i]); }
++inline static void ggml_vec_sqrt_f32 (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 7 < n; i += 8) {
++        vec_xst(vec_sqrt(vec_xl(0, x + i)),     0, y + i);
++        vec_xst(vec_sqrt(vec_xl(0, x + i + 4)), 0, y + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_sqrt(vec_xl(0, x + i)), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] = sqrtf(x[i]);
++    }
++}
+ inline static void ggml_vec_sqrt_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+-    for (int i = 0; i < n; ++i) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 3 < n; i += 4) {
++        float32x4_t vx = __lzs_f16cx4_load(x + i);
++        __lzs_f16cx4_store(y + i, vec_sqrt(vx));
++    }
++#endif
++    for (; i < n; ++i) {
+         y[i] = GGML_CPU_FP32_TO_FP16(sqrtf(GGML_CPU_FP16_TO_FP32(x[i])));
+     }
+ }
+@@ -895,7 +1063,21 @@ inline static void ggml_vec_cos_f16 (const int n, ggml_fp16_t * y, const ggml_fp
+         y[i] = GGML_CPU_FP32_TO_FP16(cosf(GGML_CPU_FP16_TO_FP32(x[i])));
+     }
+ }
+-inline static void ggml_vec_abs_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = fabsf(x[i]); }
++inline static void ggml_vec_abs_f32  (const int n, float * y, const float * x) {
++    int i = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++    for (; i + 7 < n; i += 8) {
++        vec_xst(vec_abs(vec_xl(0, x + i)),     0, y + i);
++        vec_xst(vec_abs(vec_xl(0, x + i + 4)), 0, y + i + 4);
++    }
++    for (; i + 3 < n; i += 4) {
++        vec_xst(vec_abs(vec_xl(0, x + i)), 0, y + i);
++    }
++#endif
++    for (; i < n; ++i) {
++        y[i] = fabsf(x[i]);
++    }
++}
+ inline static void ggml_vec_abs_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+     for (int i = 0; i < n; ++i) {
+         y[i] = GGML_CPU_FP32_TO_FP16(fabsf(GGML_CPU_FP16_TO_FP32(x[i])));
+@@ -1382,7 +1564,86 @@ inline static vfloat32m2_t ggml_v_silu_m2(vfloat32m2_t x, int vl) {
+     return __riscv_vfdiv_vv_f32m2(x, one_plus_exp_neg_x, vl);
+ }
+ 
+-#endif // __ARM_NEON / __AVX2__ / __SSE2__ / __riscv_v_intrinsic
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++
++// Helper: reinterpret float32x4_t as uint32x4_t and vice versa
++inline static uint32x4_t vxe_reinterpret_u32_f32(float32x4_t v) {
++    uint32x4_t r;
++    __builtin_memcpy(&r, &v, sizeof(r));
++    return r;
++}
++
++inline static float32x4_t vxe_reinterpret_f32_u32(uint32x4_t v) {
++    float32x4_t r;
++    __builtin_memcpy(&r, &v, sizeof(r));
++    return r;
++}
++
++inline static int32x4_t vxe_reinterpret_i32_f32(float32x4_t v) {
++    int32x4_t r;
++    __builtin_memcpy(&r, &v, sizeof(r));
++    return r;
++}
++
++// adapted from arm limited optimized routine
++// the maximum error is 1.45358 plus 0.5 ulps
++// numbers above 88.38 will flush to infinity
++// numbers beneath -103.97 will flush to zero
++inline static float32x4_t ggml_v_expf(float32x4_t x) {
++    const float32x4_t r = vec_splats(0x1.8p23f);
++    const float32x4_t z = vec_madd(x, vec_splats(0x1.715476p+0f), r);
++    const float32x4_t n = vec_sub(z, r);
++    // b = x - n*ln2_hi - n*ln2_lo  (use negative-multiply-add: nmsub(n, c, x) = x - n*c)
++    const float32x4_t b = vec_nmsub(n, vec_splats(0x1.7f7d1cp-20f),
++                          vec_nmsub(n, vec_splats(0x1.62e4p-1f), x));
++
++    const uint32x4_t v_23 = vec_splats((uint32_t)23);
++    const uint32x4_t e = vec_sl(vxe_reinterpret_u32_f32(z), v_23);
++    const float32x4_t k = vxe_reinterpret_f32_u32(vec_add(e, vxe_reinterpret_u32_f32(vec_splats(1.0f))));
++
++    const float32x4_t abs_n = vec_abs(n);
++    const uint32x4_t c = (uint32x4_t)vec_cmpgt(abs_n, vec_splats(126.0f));
++
++    const float32x4_t u = vec_mul(b, b);
++    // Polynomial via FMA: j = c1*b + (c2 + c3*b + (c4 + c5*b)*u)*u
++    const float32x4_t inner = vec_madd(vec_splats(0x1.0e4020p-7f), b, vec_splats(0x1.573e2ep-5f));
++    const float32x4_t mid   = vec_madd(vec_splats(0x1.555e66p-3f), b, vec_splats(0x1.fffdb6p-2f));
++    const float32x4_t j = vec_madd(vec_splats(0x1.ffffecp-1f), b,
++                          vec_mul(vec_madd(inner, u, mid), u));
++
++    // Fast path: if all |n| <= 126
++    if (!(c[0] | c[1] | c[2] | c[3])) {
++        return vec_madd(j, k, k);  // k + j*k = k*(1+j)
++    }
++
++    // Slow path for overflow/underflow
++    const uint32x4_t neg_mask = (uint32x4_t)vec_cmple(n, vec_splats(0.0f));
++    const uint32x4_t v_82 = vec_splats((uint32_t)0x82000000u);
++    const uint32x4_t v_7f = vec_splats((uint32_t)0x7f000000u);
++    const uint32x4_t d = vec_and(neg_mask, v_82);
++    const float32x4_t s1 = vxe_reinterpret_f32_u32(vec_add(d, v_7f));
++    const float32x4_t s2 = vxe_reinterpret_f32_u32(vec_sub(e, d));
++
++    const uint32x4_t d2 = (uint32x4_t)vec_cmpgt(abs_n, vec_splats(192.0f));
++    const float32x4_t overflow   = vec_mul(s1, s1);
++    const float32x4_t big_result = vec_mul(vec_madd(s2, j, s2), s1);
++    const float32x4_t normal     = vec_madd(k, j, k);
++
++    const float32x4_t r1 = vec_sel(normal, big_result, c);
++    return vec_sel(r1, overflow, d2);
++}
++
++// computes silu x/(1+exp(-x)) in single precision vector
++inline static float32x4_t ggml_v_silu(float32x4_t x) {
++    const float32x4_t one = vec_splats(1.0f);
++    const float32x4_t zero = vec_splats(0.0f);
++    const float32x4_t neg_x = vec_sub(zero, x);
++    const float32x4_t exp_neg_x = ggml_v_expf(neg_x);
++    const float32x4_t one_plus_exp_neg_x = vec_add(one, exp_neg_x);
++    return vec_div(x, one_plus_exp_neg_x);
++}
++
++#endif // __ARM_NEON / __AVX2__ / __SSE2__ / __riscv_v_intrinsic / __VXE__
+ 
+ inline static void ggml_vec_silu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+     for (int i = 0; i < n; ++i) {

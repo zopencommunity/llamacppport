@@ -1,11 +1,13 @@
-diff --git i/ggml/src/ggml-cpu/unary-ops.h w/ggml/src/ggml-cpu/unary-ops.h
-index bcad5a3..b2185f5 100644
---- i/ggml/src/ggml-cpu/unary-ops.h
-+++ w/ggml/src/ggml-cpu/unary-ops.h
-@@ -1,5 +1,7 @@
+diff --git a/ggml/src/ggml-cpu/unary-ops.h b/ggml/src/ggml-cpu/unary-ops.h
+index bcad5a3..911c674 100644
+--- a/ggml/src/ggml-cpu/unary-ops.h
++++ b/ggml/src/ggml-cpu/unary-ops.h
+@@ -1,5 +1,9 @@
  #pragma once
  
++#ifdef GGML_USE_MASS
 +#include <mass.h>
++#endif
 +
  #include "common.h"
  

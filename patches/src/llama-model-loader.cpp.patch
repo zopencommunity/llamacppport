@@ -1,7 +1,7 @@
-diff --git i/src/llama-model-loader.cpp w/src/llama-model-loader.cpp
-index 413f34c..04a17af 100644
---- i/src/llama-model-loader.cpp
-+++ w/src/llama-model-loader.cpp
+diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
+index 413f34c..381aa0a 100644
+--- a/src/llama-model-loader.cpp
++++ b/src/llama-model-loader.cpp
 @@ -535,8 +535,9 @@ llama_model_loader::llama_model_loader(
          // Load the main GGUF
          struct ggml_context * ctx = NULL;
@@ -31,8 +31,8 @@ index 413f34c..04a17af 100644
          LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
          use_mmap = false;
 +    } else if (gguf_needs_byteswap(metadata)) {
-+	LLAMA_LOG_WARN("%s: gguf file needs byteswapping, mmap is disabled. This may affect performance.\n", __func__);
-+	use_mmap = false;
++        LLAMA_LOG_WARN("%s: gguf file needs byteswapping, mmap is disabled. This may affect performance.\n", __func__);
++        use_mmap = false;
      }
  
      this->use_mmap = use_mmap;
@@ -41,12 +41,12 @@ index 413f34c..04a17af 100644
          file->seek(w.offs, SEEK_SET);
          file->read_raw(cur->data, ggml_nbytes(cur));
 +
-+	if (gguf_needs_byteswap(metadata)) {
-+	    auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
-+	    if (byteswap != nullptr) {
-+		byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
-+	    }
-+	}
++        if (gguf_needs_byteswap(metadata)) {
++            auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++            if (byteswap != nullptr) {
++                byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
++            }
++        }
      }
  
      if (check_tensors && !ggml_validate_row_data(cur->type, cur->data, ggml_nbytes(cur))) {
@@ -55,12 +55,12 @@ index 413f34c..04a17af 100644
                  file->seek(weight->offs, SEEK_SET);
                  file->read_raw(cur->data, n_size);
 +
-+	        if (gguf_needs_byteswap(metadata)) {
-+	            auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
-+	            if (byteswap != nullptr) {
-+		        byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
-+	            }
-+	        }
++                if (gguf_needs_byteswap(metadata)) {
++                    auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++                    if (byteswap != nullptr) {
++                        byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
++                    }
++                }
 +
                  if (check_tensors) {
                      validation_result.emplace_back(std::async(std::launch::async, [cur, n_size] {
@@ -96,12 +96,12 @@ index 413f34c..04a17af 100644
                      read_buf.resize(n_size);
                      file->seek(weight->offs, SEEK_SET);
                      file->read_raw(read_buf.data(), n_size);
-+		    if (gguf_needs_byteswap(metadata)) {
-+	    		auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
-+	    		if (byteswap != nullptr) {
-+			    byteswap(read_buf.data(), ggml_nelements(cur) / ggml_blck_size(cur->type));
-+	    		}
-+		    }
++                    if (gguf_needs_byteswap(metadata)) {
++                        auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
++                        if (byteswap != nullptr) {
++                            byteswap(read_buf.data(), ggml_nelements(cur) / ggml_blck_size(cur->type));
++                        }
++                    }
                      ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
                      if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
                          throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));

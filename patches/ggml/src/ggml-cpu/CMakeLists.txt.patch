@@ -1,40 +1,35 @@
-diff --git i/ggml/src/ggml-cpu/CMakeLists.txt w/ggml/src/ggml-cpu/CMakeLists.txt
-index 1a1bbc9..e991d7d 100644
---- i/ggml/src/ggml-cpu/CMakeLists.txt
-+++ w/ggml/src/ggml-cpu/CMakeLists.txt
-@@ -56,7 +56,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
- 
-     target_compile_features(${GGML_CPU_NAME} PRIVATE c_std_11 cxx_std_17)
-     target_include_directories(${GGML_CPU_NAME} PRIVATE . ggml-cpu)
--
-+    list(APPEND ARCH_FLAGS -fzvector -m64 -march=z15)
-     if (APPLE AND GGML_ACCELERATE)
-         find_library(ACCELERATE_FRAMEWORK Accelerate)
-         if (ACCELERATE_FRAMEWORK)
-@@ -101,7 +101,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
-         target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_CPU_HBM)
- 
-         target_link_libraries(${GGML_CPU_NAME} PUBLIC memkind)
--    endif()
-+   endif()
- 
-     if (GGML_SYSTEM_ARCH STREQUAL "ARM")
-         message(STATUS "ARM detected")
-@@ -552,6 +552,17 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+diff --git a/ggml/src/ggml-cpu/CMakeLists.txt b/ggml/src/ggml-cpu/CMakeLists.txt
+index 1a1bbc9..bad6210 100644
+--- a/ggml/src/ggml-cpu/CMakeLists.txt
++++ b/ggml/src/ggml-cpu/CMakeLists.txt
+@@ -549,6 +549,30 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
+     elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "wasm")
+         message(STATUS "Wasm detected")
+         list (APPEND GGML_CPU_SOURCES ggml-cpu/arch/wasm/quants.c)
++    elseif (CMAKE_SYSTEM_NAME STREQUAL "OS390")
++        message(STATUS "z/OS detected")
++        list(APPEND ARCH_FLAGS -fzvector -m64 -march=z15)
++        list(APPEND GGML_CPU_SOURCES ggml-cpu/arch/s390/quants.c)
++        list(APPEND GGML_CPU_SOURCES ggml-cpu/arch/s390/repack.cpp)
++        list(APPEND ARCH_DEFINITIONS GGML_VXE)
++        if(NOT DEFINED TARGET_ARCH)
++            set(TARGET_ARCH 13)
++        endif()
++        if(TARGET_ARCH GREATER 13)
++            target_compile_options(${GGML_CPU_NAME} PRIVATE "-qarch=${TARGET_ARCH}")
++        endif()
++        target_include_directories(${GGML_CPU_NAME} PRIVATE /usr/include)
++        # MASS/MASSV vectorized math Ã¢ÂÂ disabled by default (vsexp has issues in interactive mode)
++        # To enable: cmake -DGGML_USE_MASSV=ON
++        if(GGML_USE_MASSV)
++            target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
++            target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
++            target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_MASS)
++            message(STATUS "MASS enabled: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
++            message(STATUS "MASSV enabled: /usr/lpp/cbclib/lib/libmassv.arch${TARGET_ARCH}.a")
++        else()
++            message(STATUS "MASS/MASSV disabled (use -DGGML_USE_MASSV=ON to enable)")
++        endif()
      else()
          message(WARNING "Unknown CPU architecture. Falling back to generic implementations.")
          list(APPEND ARCH_FLAGS -DGGML_CPU_GENERIC)
-+	list(APPEND ARCH_DEFINITIONS GGML_VXE)
-+	message(STATUS "Added GGML_VXE Flag")
-+	if(NOT DEFINED TARGET_ARCH)
-+  	  set(TARGET_ARCH 13)
-+	endif()
-+	if(TARGET_ARCH GREATER 13)
-+  	  target_compile_options(${GGML_CPU_NAME} PRIVATE "-qarch=${TARGET_ARCH}")
-+	endif()
-+	target_include_directories(${GGML_CPU_NAME} PRIVATE /usr/include)
-+	target_link_libraries(${GGML_CPU_NAME} PRIVATE "/usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
-+	message(STATUS "Found MASS: /usr/lpp/cbclib/lib/libmass.arch${TARGET_ARCH}.a")
-     endif()
- 
-     if (GGML_CPU_REPACK)

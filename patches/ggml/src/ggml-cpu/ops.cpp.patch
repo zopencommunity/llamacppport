@@ -1,0 +1,29 @@
+diff --git a/ggml/src/ggml-cpu/ops.cpp b/ggml/src/ggml-cpu/ops.cpp
+index 3f85e53..af93f2f 100644
+--- a/ggml/src/ggml-cpu/ops.cpp
++++ b/ggml/src/ggml-cpu/ops.cpp
+@@ -3737,7 +3737,23 @@ static void ggml_compute_forward_rms_norm_f32(
+                 const float * x = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
+ 
+                 ggml_float sum = 0.0;
+-                for (int64_t i00 = 0; i00 < ne00; i00++) {
++                int64_t i00 = 0;
++#if defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
++                float32x4_t vsum0 = vec_splats(0.0f);
++                float32x4_t vsum1 = vec_splats(0.0f);
++                for (; i00 + 7 < ne00; i00 += 8) {
++                    float32x4_t vx0 = vec_xl(0,  x + i00);
++                    float32x4_t vx1 = vec_xl(0,  x + i00 + 4);
++                    vsum0 = vec_madd(vx0, vx0, vsum0);
++                    vsum1 = vec_madd(vx1, vx1, vsum1);
++                }
++                for (; i00 + 3 < ne00; i00 += 4) {
++                    float32x4_t vx = vec_xl(0, x + i00);
++                    vsum0 = vec_madd(vx, vx, vsum0);
++                }
++                sum = (ggml_float)(vec_hsum_f32x4(vsum0) + vec_hsum_f32x4(vsum1));
++#endif
++                for (; i00 < ne00; i00++) {
+                     sum += (ggml_float)(x[i00] * x[i00]);
+                 }
+ 

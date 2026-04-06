@@ -1,31 +1,23 @@
-diff --git i/ggml/src/ggml-impl.h w/ggml/src/ggml-impl.h
-index 9256865..8b68014 100644
---- i/ggml/src/ggml-impl.h
-+++ w/ggml/src/ggml-impl.h
-@@ -21,9 +21,21 @@
- //
- //   $ ln -sfn /Library/Developer/CommandLineTools/usr/lib/clang/13.1.6/include/arm_neon.h ./src/
- //
--#include <arm_neon.h>
-+#include <immintrin.h>
+diff --git a/ggml/src/ggml-impl.h b/ggml/src/ggml-impl.h
+index 9256865..965b4a6 100644
+--- a/ggml/src/ggml-impl.h
++++ b/ggml/src/ggml-impl.h
+@@ -24,6 +24,14 @@
+ #include <arm_neon.h>
  #endif
  
 +#if defined(__gnu_linux__)
 +#include <byteswap.h>
-+#elif defined(__MVS__)
++#else
 +#define bswap_16(x) __builtin_bswap16(x)
 +#define bswap_32(x) __builtin_bswap32(x)
 +#define bswap_64(x) __builtin_bswap64(x)
-+#else
-+#define bswap_16(x) (x)
-+#define bswap_32(x) (x)
-+#define bswap_64(x) (x)
 +#endif // defined(__gnu_linux__)
 +
  #ifdef __cplusplus
  extern "C" {
  #endif
-@@ -620,6 +632,18 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
+@@ -620,6 +628,18 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
  #define GGML_FP32_TO_BF16(x) ggml_compute_fp32_to_bf16(x)
  #define GGML_BF16_TO_FP32(x) ggml_compute_bf16_to_fp32(x)
  
@@ -44,7 +36,7 @@ index 9256865..8b68014 100644
  static inline int32_t ggml_node_get_use_count(const struct ggml_cgraph * cgraph, int node_idx) {
      const struct ggml_tensor * node = cgraph->nodes[node_idx];
  
-@@ -743,6 +767,31 @@ static inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph * cgraph,
+@@ -743,6 +763,31 @@ static inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph * cgraph,
  #include <array>
  #include <initializer_list>
  #include <vector>

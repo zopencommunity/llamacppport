@@ -1,7 +1,7 @@
-diff --git i/common/arg.cpp w/common/arg.cpp
+diff --git a/common/arg.cpp b/common/arg.cpp
 index c6a2dcb..6558b31 100644
---- i/common/arg.cpp
-+++ w/common/arg.cpp
+--- a/common/arg.cpp
++++ b/common/arg.cpp
 @@ -42,6 +42,8 @@
  #   endif
  #elif defined(_AIX)
