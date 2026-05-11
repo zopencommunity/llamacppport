@@ -1,5 +1,5 @@
 # bump: llamacpp-version /LLAMACPP_VERSION="(.*)"/ gitrefs:https://github.com/ggerganov/llama.cpp.git|re:/b([\d]{4})/|semver:*|/\d\d00$/
-LLAMACPP_VERSION="8671"
+LLAMACPP_VERSION="9100"
 
 export ZOPEN_BUILD_LINE="STABLE"
 export ZOPEN_STABLE_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl"
