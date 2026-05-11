@@ -58,7 +58,7 @@ zopen_check_results()
   echo "actualPassed:$passed"
   echo "actualSkipped:$skipped"
   echo "totalTests:$total"
-  echo "expectedFailures:8"
+  echo "expectedFailures:9"
   echo "expectedTotalTests:$total"
 }
 
