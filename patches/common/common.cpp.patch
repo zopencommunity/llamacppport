@@ -1,7 +1,7 @@
-diff --git i/common/common.cpp w/common/common.cpp
-index 59d75a3..448a3b4 100644
---- i/common/common.cpp
-+++ w/common/common.cpp
+diff --git a/common/common.cpp b/common/common.cpp
+index 59d75a3..02e8586 100644
+--- a/common/common.cpp
++++ b/common/common.cpp
 @@ -852,7 +852,7 @@ std::string fs_get_cache_directory() {
          cache_directory = std::getenv("LLAMA_CACHE");
      } else {
@@ -15,7 +15,7 @@ index 59d75a3..448a3b4 100644
      struct gguf_init_params meta_gguf_params = {
          /* .no_alloc = */ false,
          /* .ctx      = */ &ctx,
-+	/* .allow_byteswapping = */ true,
++        /* .allow_byteswapping = */ true,
      };
      struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
      if (!ctx_gguf) {

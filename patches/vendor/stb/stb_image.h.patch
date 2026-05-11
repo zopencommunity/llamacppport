@@ -1,13 +1,13 @@
-diff --git i/vendor/stb/stb_image.h w/vendor/stb/stb_image.h
-index 9eedabe..92d5251 100644
---- i/vendor/stb/stb_image.h
-+++ w/vendor/stb/stb_image.h
+diff --git a/vendor/stb/stb_image.h b/vendor/stb/stb_image.h
+index 9eedabe..baeecac 100644
+--- a/vendor/stb/stb_image.h
++++ b/vendor/stb/stb_image.h
 @@ -620,6 +620,10 @@ STBIDEF int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const ch
     #define stbi_inline __forceinline
  #endif
  
-+#ifdef __MVS__
-+   #define STBI_NO_THREAD_LOCALS
++#if defined(__MVS__)
++#define STBI_NO_THREAD_LOCALS
 +#endif
 +
  #ifndef STBI_NO_THREAD_LOCALS

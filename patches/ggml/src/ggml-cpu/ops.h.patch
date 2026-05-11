@@ -1,11 +1,13 @@
-diff --git i/ggml/src/ggml-cpu/ops.h w/ggml/src/ggml-cpu/ops.h
-index 3fa1443..2cdb4f6 100644
---- i/ggml/src/ggml-cpu/ops.h
-+++ w/ggml/src/ggml-cpu/ops.h
-@@ -1,5 +1,7 @@
+diff --git a/ggml/src/ggml-cpu/ops.h b/ggml/src/ggml-cpu/ops.h
+index 3fa1443..aba9ace 100644
+--- a/ggml/src/ggml-cpu/ops.h
++++ b/ggml/src/ggml-cpu/ops.h
+@@ -1,5 +1,9 @@
  #pragma once
  
++#ifdef GGML_USE_MASS
 +#include <mass.h>
++#endif
 +
  #include "ggml.h"
  

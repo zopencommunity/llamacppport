@@ -1,23 +1,22 @@
-diff --git i/tools/gguf-split/gguf-split.cpp w/tools/gguf-split/gguf-split.cpp
-index f99f029..be4e2a4 100644
---- i/tools/gguf-split/gguf-split.cpp
-+++ w/tools/gguf-split/gguf-split.cpp
+diff --git a/tools/gguf-split/gguf-split.cpp b/tools/gguf-split/gguf-split.cpp
+index f99f029..c3197b8 100644
+--- a/tools/gguf-split/gguf-split.cpp
++++ b/tools/gguf-split/gguf-split.cpp
 @@ -329,14 +329,20 @@ struct split_strategy {
                  const char * t_name = gguf_get_tensor_name(ctx_out, i);
                  struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
                  auto n_bytes = ggml_nbytes(t);
--                read_buf.resize(n_bytes);
 +                auto n_elements = ggml_nelements(t) / ggml_blck_size(t->type);
-+		read_buf.resize(n_bytes);
+                 read_buf.resize(n_bytes);
  
                  // calculate offset
                  auto i_tensor_in = gguf_find_tensor(ctx_gguf, t_name); // idx of tensor in the input file
                  auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor_in);
  
-+		ggml_byteswap_t byteswap_func = nullptr;
-+		if (gguf_needs_byteswap(ctx_gguf)) {
-+		    byteswap_func = ggml_get_type_traits(t->type)->byteswap;
-+		}
++                ggml_byteswap_t byteswap_func = nullptr;
++                if (gguf_needs_byteswap(ctx_gguf)) {
++                    byteswap_func = ggml_get_type_traits(t->type)->byteswap;
++                }
 +
                  // copy tensor from input to output file
 -                copy_file_to_file(f_input, fout, offset, n_bytes);
@@ -38,9 +37,9 @@ index f99f029..be4e2a4 100644
          f_in.seekg(in_offset);
          f_in.read((char *)read_buf.data(), len);
 +
-+	if (byteswap_func != nullptr) {
-+	    byteswap_func(read_buf.data(), elements);
-+	}
++        if (byteswap_func != nullptr) {
++            byteswap_func(read_buf.data(), elements);
++        }
 +
          f_out.write((const char *)read_buf.data(), len);
      }
@@ -49,7 +48,7 @@ index f99f029..be4e2a4 100644
      struct gguf_init_params params = {
          /*.no_alloc = */ true,
          /*.ctx      = */ &ctx_meta,
-+	/*.allow_byteswapping = */ true,
++        /*.allow_byteswapping = */ true,
      };
  
      std::ifstream f_input(split_params.input.c_str(), std::ios::binary);
@@ -57,24 +56,22 @@ index f99f029..be4e2a4 100644
          struct gguf_init_params params = {
              /*.no_alloc = */ true,
              /*.ctx      = */ &ctx_meta,
-+	    /*.allow_byteswapping = */ true,
++            /*.allow_byteswapping = */ true,
          };
  
          if (i_split > 0) {
-@@ -540,7 +553,15 @@ static void gguf_merge(const split_params & split_params) {
+@@ -540,6 +553,14 @@ static void gguf_merge(const split_params & split_params) {
              auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor);
              f_input.seekg(offset);
              f_input.read((char *)read_data.data(), n_bytes);
--            if (!split_params.dry_run) {
-+            
-+	    if (gguf_needs_byteswap(ctx_gguf)) {
-+		auto byteswap = ggml_get_type_traits(t->type)->byteswap;
-+		if (byteswap != nullptr) {
-+		    byteswap(read_data.data(), ggml_nelements(t) / ggml_blck_size(t->type));
-+		}
-+	    }
-+	    
-+	    if (!split_params.dry_run) {
++
++            if (gguf_needs_byteswap(ctx_gguf)) {
++                auto byteswap = ggml_get_type_traits(t->type)->byteswap;
++                if (byteswap != nullptr) {
++                    byteswap(read_data.data(), ggml_nelements(t) / ggml_blck_size(t->type));
++                }
++            }
++
+             if (!split_params.dry_run) {
                  // write tensor data + padding
                  fout.write((const char *)read_data.data(), n_bytes);
-                 zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);

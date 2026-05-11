@@ -1,12 +1,12 @@
-diff --git i/src/llama-adapter.cpp w/src/llama-adapter.cpp
-index 2f2cc12..627ef93 100644
---- i/src/llama-adapter.cpp
-+++ w/src/llama-adapter.cpp
+diff --git a/src/llama-adapter.cpp b/src/llama-adapter.cpp
+index 2f2cc12..56c7369 100644
+--- a/src/llama-adapter.cpp
++++ b/src/llama-adapter.cpp
 @@ -153,6 +153,7 @@ static void llama_adapter_lora_init_impl(llama_model & model, const char * path_
      gguf_init_params meta_gguf_params = {
          /* .no_alloc = */ true,
          /* .ctx      = */ &ctx_init,
-+	/* .allow_byteswapping = */ true,
++        /* .allow_byteswapping = */ true,
      };
  
      gguf_context_ptr ctx_gguf { gguf_init_from_file(path_lora, meta_gguf_params) };

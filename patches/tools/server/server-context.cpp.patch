@@ -1,0 +1,16 @@
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index b79a527..f7a8b65 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -638,6 +638,11 @@ private:
+             return false;
+         }
+ 
++        if (ctx == nullptr) {
++            SRV_ERR("failed to create context with model '%s'\n", params_base.model.path.c_str());
++            return false;
++        }
++
+         vocab = llama_model_get_vocab(model);
+ 
+         n_ctx = llama_n_ctx(ctx);

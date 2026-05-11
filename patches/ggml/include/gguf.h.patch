@@ -1,13 +1,13 @@
-diff --git i/ggml/include/gguf.h w/ggml/include/gguf.h
-index 79ee202..236205c 100644
---- i/ggml/include/gguf.h
-+++ w/ggml/include/gguf.h
+diff --git a/ggml/include/gguf.h b/ggml/include/gguf.h
+index 79ee202..d773690 100644
+--- a/ggml/include/gguf.h
++++ b/ggml/include/gguf.h
 @@ -74,6 +74,8 @@ extern "C" {
  
          // if not NULL, create a ggml_context and allocate the tensor data in it
          struct ggml_context ** ctx;
 +
-+	bool allow_byteswapping;
++        bool allow_byteswapping;
      };
  
      GGML_API struct gguf_context * gguf_init_empty(void);

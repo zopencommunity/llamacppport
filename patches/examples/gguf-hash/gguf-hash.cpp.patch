@@ -1,12 +1,12 @@
-diff --git i/examples/gguf-hash/gguf-hash.cpp w/examples/gguf-hash/gguf-hash.cpp
-index 331de30..d754f4b 100644
---- i/examples/gguf-hash/gguf-hash.cpp
-+++ w/examples/gguf-hash/gguf-hash.cpp
+diff --git a/examples/gguf-hash/gguf-hash.cpp b/examples/gguf-hash/gguf-hash.cpp
+index 331de30..999b918 100644
+--- a/examples/gguf-hash/gguf-hash.cpp
++++ b/examples/gguf-hash/gguf-hash.cpp
 @@ -291,6 +291,7 @@ static hash_exit_code_t gguf_hash(const hash_params & hash_params) {
      struct gguf_init_params params = {
          /*.no_alloc = */ false,
          /*.ctx      = */ &ctx_data,
-+	/*.allow_byteswapping = */ true,
++        /*.allow_byteswapping = */ true,
      };
  
      // xxh64 init

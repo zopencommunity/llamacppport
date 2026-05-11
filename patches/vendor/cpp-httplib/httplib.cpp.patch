@@ -1,7 +1,7 @@
-diff --git i/vendor/cpp-httplib/httplib.cpp w/vendor/cpp-httplib/httplib.cpp
+diff --git a/vendor/cpp-httplib/httplib.cpp b/vendor/cpp-httplib/httplib.cpp
 index fa07182..8803a41 100644
---- i/vendor/cpp-httplib/httplib.cpp
-+++ w/vendor/cpp-httplib/httplib.cpp
+--- a/vendor/cpp-httplib/httplib.cpp
++++ b/vendor/cpp-httplib/httplib.cpp
 @@ -875,7 +875,12 @@ bool write_websocket_frame(Stream &strm, ws::Opcode opcode,
  
    if (mask) {

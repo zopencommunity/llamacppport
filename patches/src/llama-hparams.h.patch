@@ -1,7 +1,7 @@
-diff --git i/src/llama-hparams.h w/src/llama-hparams.h
+diff --git a/src/llama-hparams.h b/src/llama-hparams.h
 index 78c0bc2..836cf38 100644
---- i/src/llama-hparams.h
-+++ w/src/llama-hparams.h
+--- a/src/llama-hparams.h
++++ b/src/llama-hparams.h
 @@ -3,6 +3,7 @@
  #include "llama.h"
  
