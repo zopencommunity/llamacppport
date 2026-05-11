@@ -1,5 +1,5 @@
 diff --git i/ggml/src/gguf.cpp w/ggml/src/gguf.cpp
-index ab3cc97..33ba475 100644
+index ab3cc97..6836d9d 100644
 --- i/ggml/src/gguf.cpp
 +++ w/ggml/src/gguf.cpp
 @@ -225,9 +225,12 @@ struct gguf_context {
@@ -25,15 +25,15 @@ index ab3cc97..33ba475 100644
          nbytes_remain -= nread;
          return nread == size;
      }
-@@ -400,7 +406,7 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
+@@ -399,7 +405,7 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
+         return nullptr;
      }
  
-     const struct gguf_reader gr(file);
--    struct gguf_context * ctx = new gguf_context;
-+    gguf_context * ctx = new gguf_context;
+-    const struct gguf_reader gr(file);
++    struct gguf_reader gr(file);
+     struct gguf_context * ctx = new gguf_context;
  
      bool ok = true;
- 
 @@ -433,6 +439,16 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
      int64_t n_tensors = 0;
  
