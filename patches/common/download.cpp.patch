@@ -1,8 +1,8 @@
 diff --git a/common/download.cpp b/common/download.cpp
-index 5ef60a4..f53ac67 100644
+index 40f6eb7..d608280 100644
 --- a/common/download.cpp
 +++ b/common/download.cpp
-@@ -18,6 +18,9 @@
+@@ -20,6 +20,9 @@
  #include <string>
  #include <thread>
  #include <vector>
@@ -12,7 +12,7 @@ index 5ef60a4..f53ac67 100644
  
  #include "http.h"
  
-@@ -30,6 +33,8 @@
+@@ -32,6 +35,8 @@
  #   endif
  #elif defined(_AIX)
  #include <sys/limits.h>

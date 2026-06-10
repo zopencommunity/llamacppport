@@ -1,8 +1,8 @@
 diff --git a/tools/mtmd/clip.cpp b/tools/mtmd/clip.cpp
-index a47f1f4..fd3554d 100644
+index 02e7a3a..b69c668 100644
 --- a/tools/mtmd/clip.cpp
 +++ b/tools/mtmd/clip.cpp
-@@ -911,6 +911,7 @@ struct clip_model_loader {
+@@ -1050,6 +1050,7 @@ struct clip_model_loader {
          struct gguf_init_params params = {
              /*.no_alloc = */ true,
              /*.ctx      = */ &meta,

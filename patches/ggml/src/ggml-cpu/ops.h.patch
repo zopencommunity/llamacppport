@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-cpu/ops.h b/ggml/src/ggml-cpu/ops.h
-index 3fa1443..aba9ace 100644
+index a8e18c7..669d9bd 100644
 --- a/ggml/src/ggml-cpu/ops.h
 +++ b/ggml/src/ggml-cpu/ops.h
 @@ -1,5 +1,9 @@

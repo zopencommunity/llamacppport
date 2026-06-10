@@ -1,8 +1,8 @@
 diff --git a/tools/gguf-split/gguf-split.cpp b/tools/gguf-split/gguf-split.cpp
-index f99f029..c3197b8 100644
+index 8a6b5c1..0655f35 100644
 --- a/tools/gguf-split/gguf-split.cpp
 +++ b/tools/gguf-split/gguf-split.cpp
-@@ -329,14 +329,20 @@ struct split_strategy {
+@@ -332,14 +332,20 @@ struct split_strategy {
                  const char * t_name = gguf_get_tensor_name(ctx_out, i);
                  struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
                  auto n_bytes = ggml_nbytes(t);
@@ -24,7 +24,7 @@ index f99f029..c3197b8 100644
                  zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);
              }
  
-@@ -347,13 +353,18 @@ struct split_strategy {
+@@ -350,13 +356,18 @@ struct split_strategy {
          }
      }
  
@@ -44,7 +44,7 @@ index f99f029..c3197b8 100644
          f_out.write((const char *)read_buf.data(), len);
      }
  };
-@@ -364,6 +375,7 @@ static void gguf_split(const split_params & split_params) {
+@@ -367,6 +378,7 @@ static void gguf_split(const split_params & split_params) {
      struct gguf_init_params params = {
          /*.no_alloc = */ true,
          /*.ctx      = */ &ctx_meta,
@@ -52,7 +52,7 @@ index f99f029..c3197b8 100644
      };
  
      std::ifstream f_input(split_params.input.c_str(), std::ios::binary);
-@@ -427,6 +439,7 @@ static void gguf_merge(const split_params & split_params) {
+@@ -430,6 +442,7 @@ static void gguf_merge(const split_params & split_params) {
          struct gguf_init_params params = {
              /*.no_alloc = */ true,
              /*.ctx      = */ &ctx_meta,
@@ -60,7 +60,7 @@ index f99f029..c3197b8 100644
          };
  
          if (i_split > 0) {
-@@ -540,6 +553,14 @@ static void gguf_merge(const split_params & split_params) {
+@@ -543,6 +556,14 @@ static void gguf_merge(const split_params & split_params) {
              auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor);
              f_input.seekg(offset);
              f_input.read((char *)read_data.data(), n_bytes);

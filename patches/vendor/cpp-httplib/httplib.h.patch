@@ -1,8 +1,8 @@
 diff --git a/vendor/cpp-httplib/httplib.h b/vendor/cpp-httplib/httplib.h
-index 6ec949a..02a7aa1 100644
+index cbb549e..a03a811 100644
 --- a/vendor/cpp-httplib/httplib.h
 +++ b/vendor/cpp-httplib/httplib.h
-@@ -271,6 +271,9 @@ using socklen_t = int;
+@@ -275,6 +275,9 @@ using socklen_t = int;
  #endif
  #ifdef __MVS__
  #include <strings.h>

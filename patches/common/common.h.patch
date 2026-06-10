@@ -1,0 +1,19 @@
+diff --git a/common/common.h b/common/common.h
+index 4864186..1453056 100644
+--- a/common/common.h
++++ b/common/common.h
+@@ -563,7 +563,14 @@ struct common_params {
+ 
+     bool single_turn       = false; // single turn chat conversation
+ 
++#ifdef __MVS__
++    // z/OS: decode is memory-bandwidth bound and the q8_0 vec_dot has a VXE
++    // implementation, so default the K cache to q8_0 (V stays f16 because
++    // quantized V requires flash attention)
++    ggml_type cache_type_k = GGML_TYPE_Q8_0; // KV cache data type for the K
++#else
+     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
++#endif
+     ggml_type cache_type_v = GGML_TYPE_F16; // KV cache data type for the V
+ 
+     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;

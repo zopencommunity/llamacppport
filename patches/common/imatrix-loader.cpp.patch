@@ -1,0 +1,16 @@
+diff --git a/common/imatrix-loader.cpp b/common/imatrix-loader.cpp
+index efe9aec..b3487e8 100644
+--- a/common/imatrix-loader.cpp
++++ b/common/imatrix-loader.cpp
+@@ -82,8 +82,9 @@ static bool common_imatrix_load_legacy(const std::string & fname, common_imatrix
+ bool common_imatrix_load(const std::string & fname, common_imatrix & imatrix) {
+     struct ggml_context * ctx = nullptr;
+     struct gguf_init_params meta_gguf_params = {
+-        /* .no_alloc = */ false,
+-        /* .ctx      = */ &ctx,
++        /* .no_alloc           = */ false,
++        /* .ctx                = */ &ctx,
++        /* .allow_byteswapping = */ true,
+     };
+     struct gguf_context * ctx_gguf = gguf_init_from_file(fname.c_str(), meta_gguf_params);
+     if (!ctx_gguf) {
