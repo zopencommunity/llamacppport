@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-cpu/arch-fallback.h b/ggml/src/ggml-cpu/arch-fallback.h
-index b0391a6..e71c5e3 100644
+index b0391a6..dd61143 100644
 --- a/ggml/src/ggml-cpu/arch-fallback.h
 +++ b/ggml/src/ggml-cpu/arch-fallback.h
 @@ -239,9 +239,9 @@
@@ -28,7 +28,8 @@ index b0391a6..e71c5e3 100644
 -#define ggml_gemv_q4_K_8x4_q8_K_generic ggml_gemv_q4_K_8x4_q8_K
 +// ggml_gemv_q4_K_8x4_q8_K has VXE2 implementation in arch/s390/repack.cpp
  #define ggml_gemv_q4_K_8x8_q8_K_generic ggml_gemv_q4_K_8x8_q8_K
- #define ggml_gemv_q5_K_8x4_q8_K_generic ggml_gemv_q5_K_8x4_q8_K
+-#define ggml_gemv_q5_K_8x4_q8_K_generic ggml_gemv_q5_K_8x4_q8_K
++// ggml_gemv_q5_K_8x4_q8_K has VXE2 implementation in arch/s390/repack.cpp
  #define ggml_gemv_q5_K_8x8_q8_K_generic ggml_gemv_q5_K_8x8_q8_K
 -#define ggml_gemv_q6_K_8x4_q8_K_generic ggml_gemv_q6_K_8x4_q8_K
 +// ggml_gemv_q6_K_8x4_q8_K has VXE2 implementation in arch/s390/repack.cpp
@@ -42,7 +43,8 @@ index b0391a6..e71c5e3 100644
 -#define ggml_gemm_q4_K_8x4_q8_K_generic ggml_gemm_q4_K_8x4_q8_K
 +// ggml_gemm_q4_K_8x4_q8_K has VXE2 implementation in arch/s390/repack.cpp
  #define ggml_gemm_q4_K_8x8_q8_K_generic ggml_gemm_q4_K_8x8_q8_K
- #define ggml_gemm_q5_K_8x4_q8_K_generic ggml_gemm_q5_K_8x4_q8_K
+-#define ggml_gemm_q5_K_8x4_q8_K_generic ggml_gemm_q5_K_8x4_q8_K
++// ggml_gemm_q5_K_8x4_q8_K has VXE2 implementation in arch/s390/repack.cpp
  #define ggml_gemm_q5_K_8x8_q8_K_generic ggml_gemm_q5_K_8x8_q8_K
 -#define ggml_gemm_q6_K_8x4_q8_K_generic ggml_gemm_q6_K_8x4_q8_K
 +// ggml_gemm_q6_K_8x4_q8_K has VXE2 implementation in arch/s390/repack.cpp
