@@ -1,0 +1,13 @@
+diff --git a/common/common.h b/common/common.h
+index 4864186..8749d0f 100644
+--- a/common/common.h
++++ b/common/common.h
+@@ -563,6 +563,8 @@ struct common_params {
+ 
+     bool single_turn       = false; // single turn chat conversation
+ 
++    // note: quantized K (or mixed K/V types) disables the tiled and split-KV
++    // fast paths in the CPU flash attention kernel - do not default to q8_0
+     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
+     ggml_type cache_type_v = GGML_TYPE_F16; // KV cache data type for the V
+ 

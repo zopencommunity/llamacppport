@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-cpu/repack.cpp b/ggml/src/ggml-cpu/repack.cpp
-index f18758f..9604ffe 100644
+index f18758f..eb08fc0 100644
 --- a/ggml/src/ggml-cpu/repack.cpp
 +++ b/ggml/src/ggml-cpu/repack.cpp
 @@ -4613,6 +4613,11 @@ static const ggml::cpu::tensor_traits * ggml_repack_get_optimal_repack_type(cons
@@ -14,3 +14,27 @@ index f18758f..9604ffe 100644
          if (ggml_cpu_has_riscv_v()) {
              #if defined __riscv_zvfh
              switch (__riscv_vlenb() * 8) {
+@@ -4652,6 +4657,11 @@ static const ggml::cpu::tensor_traits * ggml_repack_get_optimal_repack_type(cons
+                 return &q5_K_8x4_q8_K;
+             }
+         }
++        if (ggml_cpu_has_vxe()) {
++            if (cur->ne[1] % 8 == 0) {
++                return &q5_K_8x4_q8_K;
++            }
++        }
+     } else if (cur->type == GGML_TYPE_Q6_K) {
+         if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
+             if (cur->ne[1] % 8 == 0) {
+@@ -4663,6 +4673,11 @@ static const ggml::cpu::tensor_traits * ggml_repack_get_optimal_repack_type(cons
+                 return &q6_K_8x4_q8_K;
+             }
+         }
++        if (ggml_cpu_has_vxe()) {
++            if (cur->ne[1] % 8 == 0) {
++                return &q6_K_8x4_q8_K;
++            }
++        }
+     } else if (cur->type == GGML_TYPE_IQ4_NL) {
+         if (ggml_cpu_has_avx2()) {
+             if (cur->ne[1] % 8 == 0) {

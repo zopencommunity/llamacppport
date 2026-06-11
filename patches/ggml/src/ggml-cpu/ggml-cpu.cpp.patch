@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-cpu/ggml-cpu.cpp b/ggml/src/ggml-cpu/ggml-cpu.cpp
-index ddf1737..6a5f273 100644
+index 128883b..64adf00 100644
 --- a/ggml/src/ggml-cpu/ggml-cpu.cpp
 +++ b/ggml/src/ggml-cpu/ggml-cpu.cpp
 @@ -37,6 +37,40 @@
@@ -43,7 +43,7 @@ index ddf1737..6a5f273 100644
  // ggml-backend interface
  
  std::vector<ggml_backend_buffer_type_t> & ggml_backend_cpu_get_extra_buffer_types() {
-@@ -367,6 +401,9 @@ static void ggml_backend_cpu_device_get_memory(ggml_backend_dev_t dev, size_t *
+@@ -369,6 +403,9 @@ static void ggml_backend_cpu_device_get_memory(ggml_backend_dev_t dev, size_t *
      GlobalMemoryStatusEx(&status);
      *total = status.ullTotalPhys;
      *free = status.ullAvailPhys;

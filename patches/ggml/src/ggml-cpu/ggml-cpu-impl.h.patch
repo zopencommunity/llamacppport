@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-cpu/ggml-cpu-impl.h b/ggml/src/ggml-cpu/ggml-cpu-impl.h
-index 88a9c9e..cc21b08 100644
+index 5d1ca5f..b9b1d82 100644
 --- a/ggml/src/ggml-cpu/ggml-cpu-impl.h
 +++ b/ggml/src/ggml-cpu/ggml-cpu-impl.h
 @@ -62,14 +62,14 @@ struct ggml_compute_params {
@@ -19,7 +19,7 @@ index 88a9c9e..cc21b08 100644
  
  #if defined(__ARM_FEATURE_SVE) && defined(__linux__)
  #include <sys/prctl.h>
-@@ -349,8 +349,9 @@ inline static int32x4_t ggml_vdotq_s32(int32x4_t acc, int8x16_t a, int8x16_t b)
+@@ -359,8 +359,9 @@ static inline int32x4_t ggml_nvfp4_dot8(const int8x8_t q4_lo, const int8x8_t q8_
  #endif
  
  #if defined(__VXE__) || defined(__VXE2__)

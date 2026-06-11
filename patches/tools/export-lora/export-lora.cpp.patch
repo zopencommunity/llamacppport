@@ -1,5 +1,5 @@
 diff --git a/tools/export-lora/export-lora.cpp b/tools/export-lora/export-lora.cpp
-index 50774c5..84d2b0b 100644
+index e1bc4a2..3f213e7 100644
 --- a/tools/export-lora/export-lora.cpp
 +++ b/tools/export-lora/export-lora.cpp
 @@ -51,6 +51,7 @@ static struct gguf_context * load_gguf(std::string & fname, struct ggml_context

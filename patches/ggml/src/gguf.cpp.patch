@@ -1,40 +1,36 @@
-diff --git i/ggml/src/gguf.cpp w/ggml/src/gguf.cpp
-index ab3cc97..6836d9d 100644
---- i/ggml/src/gguf.cpp
-+++ w/ggml/src/gguf.cpp
+diff --git a/ggml/src/gguf.cpp b/ggml/src/gguf.cpp
+index 5e19861..c9f2b6c 100644
+--- a/ggml/src/gguf.cpp
++++ b/ggml/src/gguf.cpp
 @@ -225,9 +225,12 @@ struct gguf_context {
      size_t size      = 0; // size of `data` in bytes
  
      void * data = nullptr;
-+    bool needs_byteswap = false; //only for reading, writing in non-native endianness is not supported
++    bool needs_byteswap = false;
  };
  
  struct gguf_reader {
-+    bool do_byteswap = false;
++    mutable bool do_byteswap = false;
 +
-     gguf_reader(FILE * file) : file(file) {
-         // read the remaining bytes once and update on each read
-         nbytes_remain = file_remain(file);
-@@ -261,6 +264,9 @@ struct gguf_reader {
+     gguf_reader(
+             gguf_reader_callback_t callback,
+             void * userdata,
+@@ -269,7 +272,13 @@ struct gguf_reader {
+         if (size > nbytes_remain) {
              return false;
          }
-         const size_t nread = fread(&dst, 1, size, file);
+-        return read_raw(&dst, size) == size;
++        if (read_raw(&dst, size) != size) {
++            return false;
++        }
 +        if (do_byteswap) {
 +            ggml_bswap(&dst);
 +        }
-         nbytes_remain -= nread;
-         return nread == size;
-     }
-@@ -399,7 +405,7 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
-         return nullptr;
++        return true;
      }
  
--    const struct gguf_reader gr(file);
-+    struct gguf_reader gr(file);
-     struct gguf_context * ctx = new gguf_context;
- 
-     bool ok = true;
-@@ -433,6 +439,16 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
+     template <typename T>
+@@ -482,6 +491,16 @@ static struct gguf_context * gguf_init_from_reader(const struct gguf_reader & gr
      int64_t n_tensors = 0;
  
      if (ok && gr.read(ctx->version)) {
@@ -51,7 +47,7 @@ index ab3cc97..6836d9d 100644
          if (ok && ctx->version == 0) {
              GGML_LOG_ERROR("%s: bad GGUF version: %" PRIu32 "\n", __func__, ctx->version);
              ok = false;
-@@ -445,7 +461,7 @@ struct gguf_context * gguf_init_from_file_ptr(FILE * file, struct gguf_init_para
+@@ -494,7 +513,7 @@ static struct gguf_context * gguf_init_from_reader(const struct gguf_reader & gr
           * the last 4 hexadecimal digits to check if the model is the same
           * endianness as the host system.
          */
@@ -60,7 +56,7 @@ index ab3cc97..6836d9d 100644
              GGML_LOG_ERROR("%s: failed to load model: this GGUF file version %" PRIu32 " is extremely large, is there a mismatch between the host and model endianness?\n", __func__, ctx->version);
              ok = false;
          }
-@@ -1554,3 +1570,7 @@ void gguf_get_meta_data(const struct gguf_context * ctx, void * data) {
+@@ -1686,3 +1705,7 @@ void gguf_get_meta_data(const struct gguf_context * ctx, void * data) {
      gguf_write_to_buf(ctx, buf, /*only_meta =*/ true);
      memcpy(data, buf.data(), buf.size());
  }

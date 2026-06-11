@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-cpu/vec.cpp b/ggml/src/ggml-cpu/vec.cpp
-index d0e4001..d79b73b 100644
+index 67b6b05..8c7d451 100644
 --- a/ggml/src/ggml-cpu/vec.cpp
 +++ b/ggml/src/ggml-cpu/vec.cpp
 @@ -1,6 +1,7 @@
@@ -10,7 +10,7 @@ index d0e4001..d79b73b 100644
  
  // precomputed gelu table for f16 (128 KB)
  ggml_fp16_t ggml_table_gelu_f16[1 << 16];
-@@ -395,6 +396,39 @@ void ggml_vec_dot_f16(int n, float * GGML_RESTRICT s, size_t bs, ggml_fp16_t * G
+@@ -379,6 +380,39 @@ void ggml_vec_dot_f16(int n, float * GGML_RESTRICT s, size_t bs, ggml_fp16_t * G
  
  void ggml_vec_silu_f32(const int n, float * y, const float * x) {
      int i = 0;
@@ -50,7 +50,7 @@ index d0e4001..d79b73b 100644
  #if defined(__AVX512F__) && defined(__AVX512DQ__)
      for (; i + 15 < n; i += 16) {
          _mm512_storeu_ps(y + i, ggml_v_silu(_mm512_loadu_ps(x + i)));
-@@ -424,14 +458,53 @@ void ggml_vec_silu_f32(const int n, float * y, const float * x) {
+@@ -408,14 +442,53 @@ void ggml_vec_silu_f32(const int n, float * y, const float * x) {
          vfloat32m2_t vy = ggml_v_silu_m2(vx, vl);
          __riscv_vse32_v_f32m2(&y[i], vy, vl);
      }
@@ -104,7 +104,7 @@ index d0e4001..d79b73b 100644
  #if defined(__AVX512F__) && defined(__AVX512DQ__)
      for (; i + 15 < n; i += 16) {
          _mm512_storeu_ps(y + i, _mm512_mul_ps(ggml_v_silu(_mm512_loadu_ps(x + i)), _mm512_loadu_ps(g + i)));
-@@ -462,10 +535,15 @@ void ggml_vec_swiglu_f32(const int n, float * y, const float * x, const float *
+@@ -446,10 +519,15 @@ void ggml_vec_swiglu_f32(const int n, float * y, const float * x, const float *
          vfloat32m2_t vy = __riscv_vfmul_vv_f32m2(ggml_v_silu_m2(vx, vl), vg, vl);
          __riscv_vse32_v_f32m2(&y[i], vy, vl);
      }
@@ -120,7 +120,16 @@ index d0e4001..d79b73b 100644
  }
  
  ggml_float ggml_vec_cvar_f32(const int n, float * y, const float * x, const float mean) {
-@@ -547,6 +625,39 @@ ggml_float ggml_vec_cvar_f32(const int n, float * y, const float * x, const floa
+@@ -501,7 +579,7 @@ ggml_float ggml_vec_cvar_f32(const int n, float * y, const float * x, const floa
+         val = vmulq_f32(val, val);
+         sum += (ggml_float)vaddvq_f32(val);
+     }
+-#elif defined(__VXE__) || defined(__VXE2__)
++#elif defined(__VXE__) || defined(__VXE2__) || defined(__MVS__)
+     for (; i + 3 < n; i += 4) {
+         float32x4_t val = vec_sub(vec_xl(0, x + i), vec_splats(mean));
+         vec_xst(val, 0, y + i);
+@@ -531,6 +609,39 @@ ggml_float ggml_vec_cvar_f32(const int n, float * y, const float * x, const floa
  ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float max) {
      int i = 0;
      ggml_float sum = 0;
@@ -160,7 +169,7 @@ index d0e4001..d79b73b 100644
  #if defined(__AVX512F__) && defined(__AVX512DQ__)
      for (; i + 15 < n; i += 16) {
          __m512 val = ggml_v_expf(_mm512_sub_ps(_mm512_loadu_ps(x + i),
-@@ -606,6 +717,26 @@ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float
+@@ -590,6 +701,26 @@ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float
          vsum = __riscv_vfwredusum_vs_f32m2_f64m1(val, vsum, avl);
      }
      return (ggml_float)__riscv_vfmv_f_s_f64m1_f64(vsum);
@@ -187,7 +196,7 @@ index d0e4001..d79b73b 100644
  #endif
      for (; i < n; ++i) {
          float val = expf(x[i] - max);
-@@ -613,6 +744,7 @@ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float
+@@ -597,6 +728,7 @@ ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x, float
          y[i] = val;
      }
      return sum;

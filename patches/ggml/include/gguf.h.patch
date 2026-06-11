@@ -1,5 +1,5 @@
 diff --git a/ggml/include/gguf.h b/ggml/include/gguf.h
-index 79ee202..d773690 100644
+index 67851ba..7b544ef 100644
 --- a/ggml/include/gguf.h
 +++ b/ggml/include/gguf.h
 @@ -74,6 +74,8 @@ extern "C" {
@@ -10,8 +10,8 @@ index 79ee202..d773690 100644
 +        bool allow_byteswapping;
      };
  
-     GGML_API struct gguf_context * gguf_init_empty(void);
-@@ -197,6 +199,9 @@ extern "C" {
+     // callback to simulate or wrap a FILE pointer - read up to `len` bytes at `offset` into `output` and return the number of bytes read
+@@ -205,6 +207,9 @@ extern "C" {
      // writes the meta data to pointer "data"
      GGML_API void   gguf_get_meta_data(const struct gguf_context * ctx, void * data);
  

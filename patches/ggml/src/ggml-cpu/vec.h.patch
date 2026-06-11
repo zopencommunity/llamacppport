@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-cpu/vec.h b/ggml/src/ggml-cpu/vec.h
-index 3198b33..dcd2982 100644
+index 5de9cb5..0a90796 100644
 --- a/ggml/src/ggml-cpu/vec.h
 +++ b/ggml/src/ggml-cpu/vec.h
 @@ -7,6 +7,10 @@
@@ -13,7 +13,7 @@ index 3198b33..dcd2982 100644
  #if defined(GGML_USE_ACCELERATE)
  #include <Accelerate/Accelerate.h>
  #endif
-@@ -66,6 +70,14 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
+@@ -95,6 +99,14 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
          __m256 vz = _mm256_add_ps(vx, vy);
          _mm256_storeu_ps(z + i, vz);
      }
@@ -28,7 +28,7 @@ index 3198b33..dcd2982 100644
  #endif
      for (; i < n; ++i) {
          z[i] = x[i] + y[i];
-@@ -73,37 +85,148 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
+@@ -102,37 +114,148 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
  }
  
  inline static void ggml_vec_add_f16 (const int n, ggml_fp16_t * z, const ggml_fp16_t * x, const ggml_fp16_t * y) {
@@ -187,7 +187,7 @@ index 3198b33..dcd2982 100644
          z[i] = GGML_CPU_FP32_TO_FP16(GGML_CPU_FP16_TO_FP32(x[i]) / GGML_CPU_FP16_TO_FP32(y[i]));
      }
  }
-@@ -864,16 +987,61 @@ inline static void ggml_vec_scale_f16(const int n, ggml_fp16_t * y, const float
+@@ -856,16 +979,61 @@ inline static void ggml_vec_scale_f16(const int n, ggml_fp16_t * y, const float
  }
  
  inline static void ggml_vec_norm_f32 (const int n, float * s, const float * x) { ggml_vec_dot_f32(n, s, 0, x, 0, x, 0, 1); *s = sqrtf(*s);   }
@@ -253,7 +253,7 @@ index 3198b33..dcd2982 100644
          y[i] = GGML_CPU_FP32_TO_FP16(sqrtf(GGML_CPU_FP16_TO_FP32(x[i])));
      }
  }
-@@ -895,7 +1063,21 @@ inline static void ggml_vec_cos_f16 (const int n, ggml_fp16_t * y, const ggml_fp
+@@ -887,7 +1055,21 @@ inline static void ggml_vec_cos_f16 (const int n, ggml_fp16_t * y, const ggml_fp
          y[i] = GGML_CPU_FP32_TO_FP16(cosf(GGML_CPU_FP16_TO_FP32(x[i])));
      }
  }
@@ -276,7 +276,7 @@ index 3198b33..dcd2982 100644
  inline static void ggml_vec_abs_f16 (const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
      for (int i = 0; i < n; ++i) {
          y[i] = GGML_CPU_FP32_TO_FP16(fabsf(GGML_CPU_FP16_TO_FP32(x[i])));
-@@ -1382,7 +1564,86 @@ inline static vfloat32m2_t ggml_v_silu_m2(vfloat32m2_t x, int vl) {
+@@ -1367,7 +1549,86 @@ inline static vfloat32m2_t ggml_v_silu_m2(vfloat32m2_t x, int vl) {
      return __riscv_vfdiv_vv_f32m2(x, one_plus_exp_neg_x, vl);
  }
  
