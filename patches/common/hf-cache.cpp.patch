@@ -1,0 +1,45 @@
+diff --git a/common/hf-cache.cpp b/common/hf-cache.cpp
+index f1dacaa..2f1ad84 100644
+--- a/common/hf-cache.cpp
++++ b/common/hf-cache.cpp
+@@ -15,6 +15,10 @@
+ #include <string_view>
+ #include <stdexcept>
+ 
++#ifdef __MVS__
++#include <ftw.h>
++#endif
++
+ namespace nl = nlohmann;
+ 
+ #if defined(_WIN32)
+@@ -501,6 +505,21 @@ bool remove_cached_repo(const std::string & repo_id) {
+         return false;
+     }
+     fs::path repo_path = get_repo_path(repo_id);
++#ifdef __MVS__
++    // std::filesystem::remove_all is not available on z/OS (IBM Open XL C)
++    // use POSIX nftw() to walk and delete the tree depth-first
++    auto zos_rmtree = [](const char * fpath, const struct stat *, int typeflag, struct FTW *) -> int {
++	    if (typeflag == FTW_F || typeflag == FTW_SL) return remove(fpath);
++	    if (typeflag == FTW_DP) return rmdir(fpath);
++	    return 0;
++    };
++    int rc = nftw(repo_path.c_str(), zos_rmtree, 16, FTW_DEPTH | FTW_PHYS);
++    if (rc != 0) {
++	    LOG_ERR("%s: failed to remove repo cache %s\n", __func__, repo_path.string().c_str());
++	    return false;
++    }
++    return true;
++#else
+     std::error_code ec;
+     auto removed = fs::remove_all(repo_path, ec);
+     if (ec) {
+@@ -509,5 +528,7 @@ bool remove_cached_repo(const std::string & repo_id) {
+     }
+     return removed > 0;
+ }
++#endif
++}
+ 
+ } // namespace hf_cache
