@@ -1,4 +1,4 @@
-# bump: llamacpp-version /LLAMACPP_VERSION="(.*)"/ gitrefs:https://github.com/ggerganov/llama.cpp.git|re:/b([\d]{4})/|semver:*|/\d\d00$/
+# bump: llamacpp-version /LLAMACPP_VERSION="(.*)"/ gitrefs:https://github.com/ggml-org/llama.cpp.git|re:/b([\d]{4})/|semver:*|/\d+00$/
 LLAMACPP_VERSION="9700"
 
 export ZOPEN_BUILD_LINE="STABLE"
