@@ -22,12 +22,17 @@ export ZOPEN_EXTRA_CPPFLAGS="-D_XOPEN_SOURCE=600 -D_POSIX_C_SOURCE=200809L -D__X
 export ZOPEN_EXTRA_CFLAGS="-mzos-target=zosv3r1 -mzos-sys-include=/usr/include"
 export ZOPEN_EXTRA_CXXFLAGS="-mzos-target=zosv3r1 -mzos-sys-include=/usr/include"
 
-# The zDNN backend drives the Telum NNPA accelerator (z16/Telum I and up; z17/
-# Telum II adds NNPA parameter block format 1). It degrades gracefully at run
-# time -- ggml_backend_zdnn_reg_device_count() reports 0 when STFLE says NNPA is
-# absent -- but libzdnn itself is compiled for z16, so linking it statically
-# raises this package's hardware floor to z16. Build with GGML_ZDNN=OFF for a
-# z15-capable binary.
+# The zDNN backend drives the Telum Integrated Accelerator for AI (NNPA), on
+# z16/Telum I and up; z17/Telum II adds NNPA parameter block format 1. Detection
+# is entirely at run time, so this stays a single z15 binary:
+#   - ggml_backend_zdnn_reg_device_count() reports 0 devices unless STFLE bit 165
+#     says NNPA is installed, so llama.cpp just schedules onto CPU/BLAS instead;
+#   - zdnn_init() only issues NNPA-QAF behind the same check, and invoke_nnpa()
+#     returns ZDNN_UNAVAILABLE_FUNCTION without it;
+#   - the zdnn port builds at a z15 baseline and confines the arch14 instructions
+#     to convert_hw.c, whose routines are unreachable without the facility.
+# Nothing NNPA-specific executes on pre-z16 hardware, so linking this statically
+# does not raise the package's floor. Set GGML_ZDNN=OFF to drop it entirely.
 export ZOPEN_CONFIGURE="cmake"
 export ZOPEN_CONFIGURE_OPTS="-B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" -DCMAKE_C_FLAGS=\"-fzvector -m64 -march=z15\" -DCMAKE_C_STANDARD=11 -DCMAKE_C_STANDARD_REQUIRED=ON -DCMAKE_C_EXTENSIONS=OFF -DCMAKE_BUILD_TYPE=Release -DLLAMA_SERVER_SSL=ON -DOPENSSL_ROOT_DIR=\$OPENSSL_HOME -DCURL_LIBRARY=\$CURL_HOME/lib/libcurl.a -DCURL_INCLUDE_DIR=\$CURL_HOME/include -DBUILD_SHARED_LIBS_DEFAULT=OFF -DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DGGML_BACKEND_DL=OFF -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=FLAME -DBLAS_INCLUDE_DIRS=\$BLIS_HOME/include -DBLAS_LIBRARIES=\$BLIS_HOME/lib/libblis.a -DLLAMA_BUILD_TESTS=ON -DLLAMA_CURL=ON -DLLAMA_USE_PREBUILT_UI=OFF -DGGML_ZDNN=\${GGML_ZDNN:-ON} -DZDNN_ROOT=\"\$ZDNN_HOME\" ."
 
