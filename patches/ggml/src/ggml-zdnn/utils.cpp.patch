@@ -1,0 +1,97 @@
+diff --git a/ggml/src/ggml-zdnn/utils.cpp b/ggml/src/ggml-zdnn/utils.cpp
+index 2977cb0fe..346d82e9c 100644
+--- a/ggml/src/ggml-zdnn/utils.cpp
++++ b/ggml/src/ggml-zdnn/utils.cpp
+@@ -32,7 +32,7 @@
+         layout,
+         ggml_zdnn_type_mapping(src->type),
+         &pre_tfm_desc,
+-        ne[3], ne[2], ne[1], ne[0]
++        (uint32_t)ne[3], (uint32_t)ne[2], (uint32_t)ne[1], (uint32_t)ne[0]
+     );
+ 
+     ZDNN_CHECK(zdnn_generate_transformed_desc(&pre_tfm_desc, &tfm_desc));
+@@ -40,38 +40,56 @@
+ }
+ 
+ void ggml_zdnn_load_tensor(zdnn_ztensor & ztensor, void * buffer) {
+-    ZDNN_CHECK(zdnn_transform_ztensor(&ztensor, buffer));
++    const zdnn_status status = zdnn_transform_ztensor(&ztensor, buffer);
++
++    // Stickification reports ZDNN_ELEMENT_RANGE_VIOLATION when a value falls
++    // outside the DLFLOAT16 range (+/- ~8.6e9). The tensor is still usable, but
++    // those elements were clamped, so warn once rather than aborting the run or
++    // dropping the condition silently.
++    if (status == ZDNN_ELEMENT_RANGE_VIOLATION) {
++        static bool warned = false;
++        if (!warned) {
++            warned = true;
++            GGML_LOG_WARN("%s: tensor values exceed the DLFLOAT16 range and were "
++                          "clamped during stickification; results may be inaccurate\n",
++                          __func__);
++        }
++        return;
++    }
++
++    GGML_ASSERT(status == ZDNN_OK);
+ }
+ 
+ void ggml_zdnn_init_tensor(ggml_backend_zdnn_buffer * buffer, const ggml_tensor * tensor) {
+-    switch (tensor->op) {
+-        case GGML_OP_MUL_MAT:
+-            {
+-                zdnn_init_pre_transformed_desc(
+-                    ZDNN_2D,
+-                    ggml_zdnn_type_mapping(tensor->type),
+-                    &buffer->pre_tfm_desc,
+-                    tensor->ne[1], tensor->ne[0]
+-                );
+-            } break;
++    // Populate pre_tfm_desc directly instead of going through the variadic
++    // zdnn_init_pre_transformed_desc(). ne[] is int64_t and the callee reads
++    // uint32_t varargs, and z/OS ibm-clang does not promote those the way gcc
++    // does. Writing the members also leaves no dim* undefined: the library
++    // helper only assigns the dims the layout uses.
++    zdnn_tensor_desc * d = &buffer->pre_tfm_desc;
+ 
+-        default:
+-            {
+-                // For 4D tensors, GGML uses NCHW layout. However, because zDNN
+-                // automatically transforms everything to NHWC, we will use it
+-                // directly to avoid the performance penalty changing the
+-                // layout and reshaping the tensor.
+-                zdnn_init_pre_transformed_desc(
+-                    ZDNN_NHWC,
+-                    ggml_zdnn_type_mapping(tensor->type),
+-                    &buffer->pre_tfm_desc,
+-                    tensor->ne[3], tensor->ne[2], tensor->ne[1], tensor->ne[0]
+-                );
++    d->type = ggml_zdnn_type_mapping(tensor->type);
+ 
+-                // TODO: Consider adding a ggml check.
+-                // TODO: If tensor = 4D, use ZDNN_NCHW by default.
+-                // TODO: If tensor = 2D, use ZDNN_NHWC by default.
+-            } break;
++    if (tensor->op == GGML_OP_MUL_MAT) {
++        d->layout = ZDNN_2D;
++        d->dim4   = 1;
++        d->dim3   = 1;
++        d->dim2   = (uint32_t)tensor->ne[1];
++        d->dim1   = (uint32_t)tensor->ne[0];
++    } else {
++        // For 4D tensors, GGML uses NCHW layout. However, because zDNN
++        // automatically transforms everything to NHWC, we will use it
++        // directly to avoid the performance penalty changing the
++        // layout and reshaping the tensor.
++        d->layout = ZDNN_NHWC;
++        d->dim4   = (uint32_t)tensor->ne[3];
++        d->dim3   = (uint32_t)tensor->ne[2];
++        d->dim2   = (uint32_t)tensor->ne[1];
++        d->dim1   = (uint32_t)tensor->ne[0];
++
++        // TODO: Consider adding a ggml check.
++        // TODO: If tensor = 4D, use ZDNN_NCHW by default.
++        // TODO: If tensor = 2D, use ZDNN_NHWC by default.
+     }
+ 
+     ZDNN_CHECK(zdnn_generate_transformed_desc(&buffer->pre_tfm_desc, &buffer->tfm_desc));

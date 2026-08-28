@@ -1,0 +1,29 @@
+diff --git a/src/llama-mmap.cpp b/src/llama-mmap.cpp
+index ed572da7f..2bfc7a626 100644
+--- a/src/llama-mmap.cpp
++++ b/src/llama-mmap.cpp
+@@ -8,6 +8,9 @@
+ #include <climits>
+ #include <stdexcept>
+ #include <cerrno>
++#ifdef __MVS__
++#include <stdlib.h>
++#endif
+ #include <algorithm>
+ 
+ #ifdef __has_include
+@@ -323,7 +326,14 @@
+         size_t bytes_to_read = (offset_from_alignment + size + alignment - 1) & ~(alignment - 1);
+ 
+         void * raw_buffer = nullptr;
++#ifdef __MVS__
++        // z/OS does not provide posix_memalign. bytes_to_read is already rounded
++        // up to a multiple of alignment above, so aligned_alloc is a drop-in.
++        raw_buffer = aligned_alloc(alignment, bytes_to_read);
++        int ret = (raw_buffer == nullptr) ? (errno ? errno : ENOMEM) : 0;
++#else
+         int ret = posix_memalign(&raw_buffer, alignment, bytes_to_read);
++#endif
+         if (ret != 0) {
+             throw std::runtime_error(format("posix_memalign failed with error %d", ret));
+         }
