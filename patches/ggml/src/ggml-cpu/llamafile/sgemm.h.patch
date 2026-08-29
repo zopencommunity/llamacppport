@@ -1,0 +1,21 @@
+diff --git a/ggml/src/ggml-cpu/llamafile/sgemm.h b/ggml/src/ggml-cpu/llamafile/sgemm.h
+index 867b0c04a..e28b1d037 100644
+--- a/ggml/src/ggml-cpu/llamafile/sgemm.h
++++ b/ggml/src/ggml-cpu/llamafile/sgemm.h
+@@ -3,8 +3,16 @@
+ #include <stdbool.h>
+ 
+ #if defined(__VXE__) || defined(__VXE2__)
++#if defined(__MVS__)
++// z/OS: vecintrin.h carries no include guard, and <stdlib.h> has already pulled
++// it in through zos_wrappers/builtins.h by this point, so including it again
++// redefines every vec_* function. <builtins.h> is guarded and resolves to the
++// same intrinsics. (ggml-cpu-impl.h avoids this with its own __VEC__ guard.)
++#include <builtins.h>
++#else
+ #include <vecintrin.h>
+ #endif
++#endif
+ 
+ #ifdef _MSC_VER
+ #define NOINLINE __declspec(noinline)
