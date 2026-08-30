@@ -1,0 +1,33 @@
+diff --git a/ggml/src/ggml-zdnn/ggml-zdnn.cpp b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
+index 639b818d1..35417a335 100644
+--- a/ggml/src/ggml-zdnn/ggml-zdnn.cpp
++++ b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
+@@ -10,6 +10,7 @@
+ #include <vector>
+ #include <memory>
+ #include <csignal>  // raise(SIGTRAP)
++#include <cstdlib>  // getenv
+ #include <unistd.h>
+ 
+ static void ggml_zdnn_compute_forward_mul_mat(
+@@ -559,6 +560,20 @@
+ }
+ 
+ static size_t ggml_backend_zdnn_reg_device_count(ggml_backend_reg_t reg) {
++    // Setting GGML_DISABLE_ZDNN turns the accelerator off at run time, mirroring
++    // GGML_DISABLE_VULKAN. Reporting no devices is the same path taken on
++    // hardware without NNPA, so the scheduler simply falls back to CPU/BLAS.
++    // Evaluated once: this is called repeatedly during backend enumeration.
++    static const bool disabled = getenv("GGML_DISABLE_ZDNN") != nullptr;
++    if (disabled) {
++        static bool logged = false;
++        if (!logged) {
++            logged = true;
++            GGML_LOG_INFO("%s: zDNN backend disabled by GGML_DISABLE_ZDNN\n", __func__);
++        }
++        return 0;
++    }
++
+     if (!zdnn_is_nnpa_installed()) {
+         return 0;
+     }
