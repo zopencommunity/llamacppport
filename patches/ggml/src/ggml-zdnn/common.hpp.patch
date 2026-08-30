@@ -1,0 +1,25 @@
+diff --git a/ggml/src/ggml-zdnn/common.hpp b/ggml/src/ggml-zdnn/common.hpp
+index 2462ded55..cab7b9588 100644
+--- a/ggml/src/ggml-zdnn/common.hpp
++++ b/ggml/src/ggml-zdnn/common.hpp
+@@ -12,10 +12,16 @@
+ #define GGML_ZDNN_NAME    "zDNN"
+ #define GGML_ZDNN_VERSION ZDNN_VERNUM
+ 
+-#define ZDNN_CHECK(stmt)                \
+-    do {                                \
+-        zdnn_status status = (stmt);    \
+-        GGML_ASSERT(status == ZDNN_OK); \
++// ZDNN_ELEMENT_RANGE_VIOLATION sits in the ZDNN_WARNING class (0x00020000), not
++// in any error class: the operation completed and its result is usable, values
++// simply fell outside the DLFLOAT16 range and were saturated. Asserting on it
++// aborts inference mid-graph -- on z17 this kills prompt processing outright.
++// Accept the warning class; every real error still asserts.
++#define ZDNN_CHECK(stmt)                                                       \
++    do {                                                                       \
++        zdnn_status status = (stmt);                                           \
++        GGML_ASSERT(status == ZDNN_OK ||                                       \
++                    (status & 0xFFFF0000u) == ZDNN_WARNING);                   \
+     } while (0);
+ 
+ struct ggml_backend_zdnn_device_context {
