@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-zdnn/utils.cpp b/ggml/src/ggml-zdnn/utils.cpp
-index 2977cb0fe..015746658 100644
+index 2977cb0fe..a4a882883 100644
 --- a/ggml/src/ggml-zdnn/utils.cpp
 +++ b/ggml/src/ggml-zdnn/utils.cpp
 @@ -32,7 +32,7 @@
@@ -11,17 +11,37 @@ index 2977cb0fe..015746658 100644
      );
  
      ZDNN_CHECK(zdnn_generate_transformed_desc(&pre_tfm_desc, &tfm_desc));
-@@ -40,38 +40,43 @@
+@@ -40,38 +40,63 @@
  }
  
  void ggml_zdnn_load_tensor(zdnn_ztensor & ztensor, void * buffer) {
 -    ZDNN_CHECK(zdnn_transform_ztensor(&ztensor, buffer));
-+    // Use the saturating transform. Activations routinely exceed the DLFLOAT16
-+    // range (+/- 8.57e9), and the plain zdnn_transform_ztensor treats that as
-+    // ZDNN_CONVERT_FAILURE via FE_OVERFLOW/FE_INVALID, which aborts inference.
-+    // Measured on z17: with saturation a 1e30 input returns ZDNN_OK and clamps
-+    // to 8.57316e+09, while ordinary values round-trip exactly.
-+    ZDNN_CHECK(zdnn_transform_ztensor_with_saturation(&ztensor, buffer));
++    // Saturating transform: activations routinely exceed the DLFLOAT16 range
++    // (+/- 8.57e9) and the plain transform reports that as ZDNN_CONVERT_FAILURE.
++    // Measured on z17, saturation returns ZDNN_OK and clamps to 8.57316e+09,
++    // while ordinary values round-trip exactly.
++    const zdnn_status status = zdnn_transform_ztensor_with_saturation(&ztensor, buffer);
++
++    if (status == ZDNN_OK || (status & 0xFFFF0000u) == ZDNN_WARNING) {
++        return;
++    }
++
++    // Stickification can still fail outright on Inf/NaN: zdnn rejects those for
++    // FP16 even with saturation (verified on z17: -inf and NaN both give
++    // ZDNN_CONVERT_FAILURE, while fp16 max 65504 succeeds). Every tensor placed
++    // in a zDNN buffer is stickified, but ggml_zdnn_supports_op only ever routes
++    // MUL_MAT here, so this is typically a tensor zDNN will never read -- an
++    // attention mask holding -inf, for instance. Leave the ztensor untransformed
++    // instead of aborting inference. If such a tensor really is consumed by a
++    // matmul, zdnn_matmul_transpose_op rejects the untransformed operand and
++    // ZDNN_CHECK in mmf.cpp reports it there.
++    static bool warned = false;
++    if (!warned) {
++        warned = true;
++        GGML_LOG_WARN("%s: zDNN stickification failed (status 0x%08x); leaving the "
++                      "tensor untransformed. This is expected for tensors holding "
++                      "Inf/NaN, such as attention masks.\n", __func__, status);
++    }
  }
  
  void ggml_zdnn_init_tensor(ggml_backend_zdnn_buffer * buffer, const ggml_tensor * tensor) {
