@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-zdnn/utils.cpp b/ggml/src/ggml-zdnn/utils.cpp
-index 2977cb0fe..a4a882883 100644
+index 2977cb0fe..e8aa89fcd 100644
 --- a/ggml/src/ggml-zdnn/utils.cpp
 +++ b/ggml/src/ggml-zdnn/utils.cpp
 @@ -32,7 +32,7 @@
@@ -11,30 +11,26 @@ index 2977cb0fe..a4a882883 100644
      );
  
      ZDNN_CHECK(zdnn_generate_transformed_desc(&pre_tfm_desc, &tfm_desc));
-@@ -40,38 +40,63 @@
+@@ -40,38 +40,59 @@
  }
  
  void ggml_zdnn_load_tensor(zdnn_ztensor & ztensor, void * buffer) {
 -    ZDNN_CHECK(zdnn_transform_ztensor(&ztensor, buffer));
-+    // Saturating transform: activations routinely exceed the DLFLOAT16 range
-+    // (+/- 8.57e9) and the plain transform reports that as ZDNN_CONVERT_FAILURE.
-+    // Measured on z17, saturation returns ZDNN_OK and clamps to 8.57316e+09,
-+    // while ordinary values round-trip exactly.
-+    const zdnn_status status = zdnn_transform_ztensor_with_saturation(&ztensor, buffer);
++    const zdnn_status status = zdnn_transform_ztensor(&ztensor, buffer);
 +
 +    if (status == ZDNN_OK || (status & 0xFFFF0000u) == ZDNN_WARNING) {
 +        return;
 +    }
 +
-+    // Stickification can still fail outright on Inf/NaN: zdnn rejects those for
-+    // FP16 even with saturation (verified on z17: -inf and NaN both give
++    // Stickification can fail outright on Inf/NaN: zdnn rejects those for FP16
++    // even with saturation (verified on z17: -inf and NaN both give
 +    // ZDNN_CONVERT_FAILURE, while fp16 max 65504 succeeds). Every tensor placed
 +    // in a zDNN buffer is stickified, but ggml_zdnn_supports_op only ever routes
-+    // MUL_MAT here, so this is typically a tensor zDNN will never read -- an
++    // MUL_MAT here, so this is typically a tensor zDNN never reads -- an
 +    // attention mask holding -inf, for instance. Leave the ztensor untransformed
-+    // instead of aborting inference. If such a tensor really is consumed by a
++    // rather than aborting inference. If such a tensor really is consumed by a
 +    // matmul, zdnn_matmul_transpose_op rejects the untransformed operand and
-+    // ZDNN_CHECK in mmf.cpp reports it there.
++    // ZDNN_CHECK in mmf.cpp reports it at the point of use.
 +    static bool warned = false;
 +    if (!warned) {
 +        warned = true;
