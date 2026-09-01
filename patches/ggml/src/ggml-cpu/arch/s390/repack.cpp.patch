@@ -1,9 +1,9 @@
 diff --git a/ggml/src/ggml-cpu/arch/s390/repack.cpp b/ggml/src/ggml-cpu/arch/s390/repack.cpp
 new file mode 100644
-index 0000000..2b51c9f
+index 0000000..db3ec0c
 --- /dev/null
 +++ b/ggml/src/ggml-cpu/arch/s390/repack.cpp
-@@ -0,0 +1,1071 @@
+@@ -0,0 +1,1114 @@
 +#define GGML_COMMON_IMPL_CPP
 +#define GGML_COMMON_DECL_CPP
 +#include "ggml-common.h"
@@ -17,6 +17,7 @@ index 0000000..2b51c9f
 +
 +#include <cmath>
 +#include <cstring>
++#include <vector>
 +#include <cassert>
 +#include <cstdlib>
 +#include <cstdio>
@@ -301,13 +302,41 @@ index 0000000..2b51c9f
 +        vec_xl(0, bcast_data[2]), vec_xl(0, bcast_data[3]),
 +    };
 +
-+    uint32_t utmp[32];
++    // The scale decode and the fp16->fp32 conversion of d/dmin depend only on the
++    // column tile and the super-block, never on the row block, but they used to
++    // sit inside the row loop and so ran nr/4 times over. Iterate columns on the
++    // outside and compute them once per (x, l): for a 512-token prompt that is
++    // 128x less of this work. Each (y, x) tile still writes a distinct slice of
++    // s, so the interchange leaves the result untouched.
++    std::vector<uint32_t> utmp_all((size_t) nb * 32);
++    std::vector<float>    d_all   ((size_t) nb * 8);
++    std::vector<float>    dmin_all((size_t) nb * 8);
 +
-+    for (int y = 0; y < nr / 4; y++) {
-+        const block_q8_Kx4 * a_ptr = (const block_q8_Kx4 *)vy + (y * nb);
++    for (int x = 0; x < nc / 8; x++) {
++        const block_q4_Kx8 * b_ptr = (const block_q4_Kx8 *)vx + (x * nb);
 +
-+        for (int x = 0; x < nc / 8; x++) {
-+            const block_q4_Kx8 * b_ptr = (const block_q4_Kx8 *)vx + (x * nb);
++        for (int l = 0; l < nb; l++) {
++            uint32_t * utmp = utmp_all.data() + (size_t) l * 32;
++
++            // Decode scales
++            for (int sb = 0; sb < 8; sb++) {
++                memcpy(utmp + sb*4, b_ptr[l].scales + sb*12, 12);
++                utmp[sb*4+3] = ((utmp[sb*4+2] >> 4) & kmask2) | (((utmp[sb*4+1] >> 6) & kmask3) << 4);
++                const uint32_t uaux = utmp[sb*4+1] & kmask1;
++                utmp[sb*4+1] = (utmp[sb*4+2] & kmask2) | (((utmp[sb*4+0] >> 6) & kmask3) << 4);
++                utmp[sb*4+2] = uaux;
++                utmp[sb*4+0] &= kmask1;
++            }
++
++            // Load d[0..7] and dmin[0..7] as fp32
++            for (int j = 0; j < 8; j++) {
++                d_all   [(size_t) l * 8 + j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].d[j]);
++                dmin_all[(size_t) l * 8 + j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].dmin[j]);
++            }
++        }
++
++        for (int y = 0; y < nr / 4; y++) {
++            const block_q8_Kx4 * a_ptr = (const block_q8_Kx4 *)vy + (y * nb);
 +
 +            // 4 rows x 2 col groups = 8 float accumulators
 +            float32x4_t sumf[4][2];
@@ -317,22 +346,11 @@ index 0000000..2b51c9f
 +            }
 +
 +            for (int l = 0; l < nb; l++) {
-+                // Decode scales
-+                for (int sb = 0; sb < 8; sb++) {
-+                    memcpy(utmp + sb*4, b_ptr[l].scales + sb*12, 12);
-+                    utmp[sb*4+3] = ((utmp[sb*4+2] >> 4) & kmask2) | (((utmp[sb*4+1] >> 6) & kmask3) << 4);
-+                    const uint32_t uaux = utmp[sb*4+1] & kmask1;
-+                    utmp[sb*4+1] = (utmp[sb*4+2] & kmask2) | (((utmp[sb*4+0] >> 6) & kmask3) << 4);
-+                    utmp[sb*4+2] = uaux;
-+                    utmp[sb*4+0] &= kmask1;
-+                }
++                const uint32_t * utmp = utmp_all.data() + (size_t) l * 32;
 +
-+                // Load d[0..7] and dmin[0..7] as fp32
-+                float d_vals[8], dmin_vals[8];
-+                for (int j = 0; j < 8; j++) {
-+                    d_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].d[j]);
-+                    dmin_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].dmin[j]);
-+                }
++                const float * d_vals    = d_all.data()    + (size_t) l * 8;
++                const float * dmin_vals = dmin_all.data() + (size_t) l * 8;
++
 +                const float32x4_t d_lo = vec_xl(0, d_vals);
 +                const float32x4_t d_hi = vec_xl(0, d_vals + 4);
 +                const float32x4_t dmin_lo = vec_xl(0, dmin_vals);
@@ -618,13 +636,41 @@ index 0000000..2b51c9f
 +        vec_xl(0, bcast_data[2]), vec_xl(0, bcast_data[3]),
 +    };
 +
-+    uint32_t utmp[32];
++    // The scale decode and the fp16->fp32 conversion of d/dmin depend only on the
++    // column tile and the super-block, never on the row block, but they used to
++    // sit inside the row loop and so ran nr/4 times over. Iterate columns on the
++    // outside and compute them once per (x, l): for a 512-token prompt that is
++    // 128x less of this work. Each (y, x) tile still writes a distinct slice of
++    // s, so the interchange leaves the result untouched.
++    std::vector<uint32_t> utmp_all((size_t) nb * 32);
++    std::vector<float>    d_all   ((size_t) nb * 8);
++    std::vector<float>    dmin_all((size_t) nb * 8);
 +
-+    for (int y = 0; y < nr / 4; y++) {
-+        const block_q8_Kx4 * a_ptr = (const block_q8_Kx4 *)vy + (y * nb);
++    for (int x = 0; x < nc / 8; x++) {
++        const block_q5_Kx8 * b_ptr = (const block_q5_Kx8 *)vx + (x * nb);
 +
-+        for (int x = 0; x < nc / 8; x++) {
-+            const block_q5_Kx8 * b_ptr = (const block_q5_Kx8 *)vx + (x * nb);
++        for (int l = 0; l < nb; l++) {
++            uint32_t * utmp = utmp_all.data() + (size_t) l * 32;
++
++            // Decode scales
++            for (int sb = 0; sb < 8; sb++) {
++                memcpy(utmp + sb*4, b_ptr[l].scales + sb*12, 12);
++                utmp[sb*4+3] = ((utmp[sb*4+2] >> 4) & kmask2) | (((utmp[sb*4+1] >> 6) & kmask3) << 4);
++                const uint32_t uaux = utmp[sb*4+1] & kmask1;
++                utmp[sb*4+1] = (utmp[sb*4+2] & kmask2) | (((utmp[sb*4+0] >> 6) & kmask3) << 4);
++                utmp[sb*4+2] = uaux;
++                utmp[sb*4+0] &= kmask1;
++            }
++
++            // Load d[0..7] and dmin[0..7] as fp32
++            for (int j = 0; j < 8; j++) {
++                d_all   [(size_t) l * 8 + j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].d[j]);
++                dmin_all[(size_t) l * 8 + j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].dmin[j]);
++            }
++        }
++
++        for (int y = 0; y < nr / 4; y++) {
++            const block_q8_Kx4 * a_ptr = (const block_q8_Kx4 *)vy + (y * nb);
 +
 +            // 4 rows x 2 col groups = 8 float accumulators
 +            float32x4_t sumf[4][2];
@@ -634,22 +680,11 @@ index 0000000..2b51c9f
 +            }
 +
 +            for (int l = 0; l < nb; l++) {
-+                // Decode scales
-+                for (int sb = 0; sb < 8; sb++) {
-+                    memcpy(utmp + sb*4, b_ptr[l].scales + sb*12, 12);
-+                    utmp[sb*4+3] = ((utmp[sb*4+2] >> 4) & kmask2) | (((utmp[sb*4+1] >> 6) & kmask3) << 4);
-+                    const uint32_t uaux = utmp[sb*4+1] & kmask1;
-+                    utmp[sb*4+1] = (utmp[sb*4+2] & kmask2) | (((utmp[sb*4+0] >> 6) & kmask3) << 4);
-+                    utmp[sb*4+2] = uaux;
-+                    utmp[sb*4+0] &= kmask1;
-+                }
++                const uint32_t * utmp = utmp_all.data() + (size_t) l * 32;
 +
-+                // Load d[0..7] and dmin[0..7] as fp32
-+                float d_vals[8], dmin_vals[8];
-+                for (int j = 0; j < 8; j++) {
-+                    d_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].d[j]);
-+                    dmin_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].dmin[j]);
-+                }
++                const float * d_vals    = d_all.data()    + (size_t) l * 8;
++                const float * dmin_vals = dmin_all.data() + (size_t) l * 8;
++
 +                const float32x4_t d_lo = vec_xl(0, d_vals);
 +                const float32x4_t d_hi = vec_xl(0, d_vals + 4);
 +                const float32x4_t dmin_lo = vec_xl(0, dmin_vals);
@@ -916,11 +951,22 @@ index 0000000..2b51c9f
 +        vec_xl(0, bcast_data[2]), vec_xl(0, bcast_data[3]),
 +    };
 +
-+    for (int y = 0; y < nr / 4; y++) {
-+        const block_q8_Kx4 * a_ptr = (const block_q8_Kx4 *)vy + (y * nb);
++    // q6_K keeps its scales as plain int8, so only the fp16->fp32 conversion of d
++    // is loop-invariant here - but it too used to run once per row block. Same
++    // interchange as q4_K/q5_K above.
++    std::vector<float> d_all((size_t) nb * 8);
 +
-+        for (int x = 0; x < nc / 8; x++) {
-+            const block_q6_Kx8 * b_ptr = (const block_q6_Kx8 *)vx + (x * nb);
++    for (int x = 0; x < nc / 8; x++) {
++        const block_q6_Kx8 * b_ptr = (const block_q6_Kx8 *)vx + (x * nb);
++
++        for (int l = 0; l < nb; l++) {
++            for (int j = 0; j < 8; j++) {
++                d_all[(size_t) l * 8 + j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].d[j]);
++            }
++        }
++
++        for (int y = 0; y < nr / 4; y++) {
++            const block_q8_Kx4 * a_ptr = (const block_q8_Kx4 *)vy + (y * nb);
 +
 +            // 4 rows x 2 col groups = 8 float accumulators
 +            float32x4_t sumf[4][2];
@@ -930,11 +976,8 @@ index 0000000..2b51c9f
 +            }
 +
 +            for (int l = 0; l < nb; l++) {
-+                // Load d[0..7] as fp32
-+                float d_vals[8];
-+                for (int j = 0; j < 8; j++) {
-+                    d_vals[j] = GGML_CPU_FP16_TO_FP32(b_ptr[l].d[j]);
-+                }
++                const float * d_vals = d_all.data() + (size_t) l * 8;
++
 +                const float32x4_t d_lo = vec_xl(0, d_vals);
 +                const float32x4_t d_hi = vec_xl(0, d_vals + 4);
 +
