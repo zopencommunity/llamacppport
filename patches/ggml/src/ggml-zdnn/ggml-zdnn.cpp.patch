@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-zdnn/ggml-zdnn.cpp b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
-index 639b818d1..35417a335 100644
+index 639b818d1..e908fc1d9 100644
 --- a/ggml/src/ggml-zdnn/ggml-zdnn.cpp
 +++ b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
 @@ -10,6 +10,7 @@
@@ -10,7 +10,36 @@ index 639b818d1..35417a335 100644
  #include <unistd.h>
  
  static void ggml_zdnn_compute_forward_mul_mat(
-@@ -559,6 +560,20 @@
+@@ -286,10 +287,24 @@
+ 
+     ggml_backend_zdnn_buffer * extra = (ggml_backend_zdnn_buffer *)tensor->extra;
+ 
+-    // Fixes the LLAMA_SET_ROWS bug
+-    // see: https://github.com/ggml-org/llama.cpp/issues/15414
+-    if (tensor->buffer->usage == GGML_BACKEND_BUFFER_USAGE_COMPUTE && extra->ztensor.is_transformed) zdnn_reset_ztensor(&extra->ztensor);
+-    if (extra->ztensor.is_transformed == false) ggml_zdnn_load_tensor(extra->ztensor, tensor->data);
++    // Only invalidate here. The conversion itself happens lazily, on first use
++    // in ggml_zdnn_mul_mat_f().
++    //
++    // Stickification is whole-tensor, but set_tensor is handed an offset/size
++    // and may be covering only part of the tensor. Converting here would read
++    // whatever the rest of the buffer happens to hold, which for a partially
++    // written tensor is uninitialised memory -- that lands in the ztensor as
++    // huge or NaN activations and the matmul then saturates or fails outright.
++    // Deferring to first use means every write has landed by the time the whole
++    // tensor is read.
++    //
++    // It also means tensors zDNN never looks at are never converted at all.
++    // ggml_zdnn_supports_op only routes MUL_MAT here, so an attention mask
++    // holding -inf no longer has to survive a DLFLOAT16 conversion it was never
++    // going to be used for.
++    //
++    // Retains the LLAMA_SET_ROWS fix: see ggml-org/llama.cpp#15414
++    if (extra->ztensor.is_transformed) zdnn_reset_ztensor(&extra->ztensor);
+ 
+     GGML_UNUSED(buffer);
+ }
+@@ -559,6 +574,20 @@
  }
  
  static size_t ggml_backend_zdnn_reg_device_count(ggml_backend_reg_t reg) {
