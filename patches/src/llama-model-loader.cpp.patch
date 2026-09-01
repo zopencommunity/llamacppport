@@ -1,28 +1,117 @@
 diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
-index 510586e96..86d2e215b 100644
+index 510586e96..188cc517f 100644
 --- a/src/llama-model-loader.cpp
 +++ b/src/llama-model-loader.cpp
-@@ -551,6 +551,7 @@ llama_model_loader::llama_model_loader(
+@@ -551,6 +551,7 @@
          struct gguf_init_params params = {
              /*.no_alloc = */ true,
              /*.ctx      = */ &ctx,
-+	    /*.allow_byteswapping = */ true,
++            /*.allow_byteswapping = */ true,
          };
  
          metadata_ptr.reset(gguf_init_from_file(fname.c_str(), params));
-@@ -612,6 +613,7 @@ llama_model_loader::llama_model_loader(
+@@ -612,6 +613,7 @@
                  struct gguf_init_params split_params = {
                      /*.no_alloc = */ true,
                      /*.ctx      = */ &ctx,
-+		    /*.allow_byteswapping = */ true,
++                    /*.allow_byteswapping = */ true,
                  };
                  gguf_context_ptr ctx_gguf { gguf_init_from_file(fname_split, split_params) };
                  if (!ctx_gguf) {
-@@ -663,6 +665,7 @@ llama_model_loader::llama_model_loader(
+@@ -663,6 +665,7 @@
          struct gguf_init_params params = {
              /*.no_alloc = */ true,
              /*.ctx      = */ &ctx,
-+	    /*.allow_byteswapping = */ true,
++            /*.allow_byteswapping = */ true,
          };
  
          metadata_ptr.reset(gguf_init_from_file_ptr(file, params));
+@@ -808,6 +811,19 @@
+     if (this->use_mmap && !llama_mmap::SUPPORTED) {
+         LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
+         this->use_mmap = false;
++    }
++
++    // gguf_init_from_file() byteswaps the metadata of a GGUF whose endianness differs
++    // from the host, but not the tensor data - that is done here as the tensors are read.
++    byteswap = metadata != nullptr && gguf_needs_byteswap(metadata);
++    if (byteswap) {
++        LLAMA_LOG_INFO("%s: model endianness differs from the host, byteswapping tensor data\n", __func__);
++
++        if (this->use_mmap) {
++            // the mapping is read-only and backed by the file, so it cannot be swapped in place
++            LLAMA_LOG_WARN("%s: disabling mmap, it cannot be combined with byteswapping\n", __func__);
++            this->use_mmap = false;
++        }
+     }
+ 
+     this->check_tensors = check_tensors;
+@@ -1376,8 +1392,24 @@
+     }
+ }
+ 
++void llama_model_loader::byteswap_tensor_data(const struct ggml_tensor * cur, void * data) const {
++    if (!byteswap) {
++        return;
++    }
++
++    const ggml_byteswap_t bswap = ggml_get_type_traits(cur->type)->byteswap;
++    if (bswap == nullptr) {
++        // types built out of single bytes (i8, mxfp4, ...) are endian independent
++        return;
++    }
++
++    bswap(data, ggml_nelements(cur) / ggml_blck_size(cur->type));
++}
++
+ void llama_model_loader::load_data_for(struct ggml_tensor * cur) const {
+     const auto & w = require_weight(ggml_get_name(cur));
++
++    GGML_ASSERT(!(byteswap && use_mmap)); // mmap is disabled in the constructor when byteswapping
+ 
+     if (use_mmap) {
+         const auto & mapping = mappings.at(w.idx);
+@@ -1392,6 +1424,7 @@
+         const auto & file = files.at(w.idx);
+         file->seek(w.offs, SEEK_SET);
+         file->read_raw(cur->data, ggml_nbytes(cur));
++        byteswap_tensor_data(cur, cur->data);
+     }
+ 
+     if (check_tensors && !ggml_validate_row_data(cur->type, cur->data, ggml_nbytes(cur))) {
+@@ -1434,7 +1467,9 @@
+     std::vector<void *> host_ptrs;
+     size_t buffer_idx = 0; // buffer to use for async loads
+     ggml_backend_t upload_backend = [&](const char * func) -> ggml_backend_t {
+-        if (use_mmap || check_tensors) {
++        // byteswapping is excluded because the chunked reads below can split a
++        // quantisation block across two buffers
++        if (use_mmap || check_tensors || byteswap) {
+             return nullptr;
+         }
+         // When not using mmaped io use async uploads from pinned memory to GPU memory.
+@@ -1529,6 +1564,8 @@
+ 
+         size_t n_size = ggml_nbytes(cur);
+ 
++        GGML_ASSERT(!(byteswap && use_mmap)); // mmap is disabled in the constructor when byteswapping
++
+         if (use_mmap) {
+             const auto & mapping = mappings.at(weight->idx);
+             ggml_backend_buffer_t buf_mmap = nullptr;
+@@ -1563,6 +1600,7 @@
+             if (ggml_backend_buffer_is_host(cur->buffer)) {
+                 file->seek(weight->offs, SEEK_SET);
+                 file->read_raw(cur->data, n_size);
++                byteswap_tensor_data(cur, cur->data);
+                 if (check_tensors) {
+                     validation_result.emplace_back(std::async(std::launch::async, [cur, n_size] {
+                         return std::make_pair(cur, ggml_validate_row_data(cur->type, cur->data, n_size));
+@@ -1626,6 +1664,7 @@
+                     read_buf.resize(n_size);
+                     file->seek(weight->offs, SEEK_SET);
+                     file->read_raw(read_buf.data(), n_size);
++                    byteswap_tensor_data(cur, read_buf.data());
+                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
+                     if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
+                         throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));

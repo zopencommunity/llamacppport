@@ -1,0 +1,22 @@
+diff --git a/src/llama-model-loader.h b/src/llama-model-loader.h
+index 75a3652d0..8488de52d 100644
+--- a/src/llama-model-loader.h
++++ b/src/llama-model-loader.h
+@@ -79,6 +79,7 @@
+     bool use_direct_io = false;
+     bool check_tensors;
+     bool no_alloc;
++    bool byteswap = false; // the file and the host disagree on endianness
+ 
+     llama_files files;
+     llama_ftype ftype;
+@@ -189,6 +190,9 @@
+ 
+     void get_mapping_range(size_t * first, size_t * last, void ** addr, int idx, ggml_context * ctx) const;
+ 
++    // swap `data`, holding the payload of `cur`, if the file and the host disagree on endianness
++    void byteswap_tensor_data(const struct ggml_tensor * cur, void * data) const;
++
+     // for backwards compatibility, does not support ggml-backend
+     void load_data_for(struct ggml_tensor * cur) const;
+ 
