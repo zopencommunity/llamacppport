@@ -1,0 +1,22 @@
+diff --git a/ggml/src/ggml-zdnn/utils.hpp b/ggml/src/ggml-zdnn/utils.hpp
+index c1e2028..128d8cd 100644
+--- a/ggml/src/ggml-zdnn/utils.hpp
++++ b/ggml/src/ggml-zdnn/utils.hpp
+@@ -14,6 +14,17 @@
+ 
+ void ggml_zdnn_load_tensor(zdnn_ztensor & ztensor, void * buffer);
+ 
++// True when GGML_ZDNN_DEQUANT is set: quantised weights are dequantised to
++// DLFLOAT16 at first use so the accelerator can run their matmuls.
++bool ggml_zdnn_dequant_enabled(void);
++
++// Dequantise a quantised tensor into a scratch buffer and stickify that.
++void ggml_zdnn_load_tensor_dequant(zdnn_ztensor & ztensor, const ggml_tensor * tensor);
++
++// The ztensor type to build for a ggml tensor: quantised types are carried as
++// FP32, since that is what gets stickified after dequantisation.
++zdnn_data_types ggml_zdnn_ztensor_type(ggml_type type);
++
+ void ggml_zdnn_init_tensor(ggml_backend_zdnn_buffer * buffer, const ggml_tensor * tensor);
+ 
+ #endif  // GGML_ZDNN_UTILITIES_HPP

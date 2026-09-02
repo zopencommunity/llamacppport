@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-zdnn/ggml-zdnn.cpp b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
-index 639b818d1..e908fc1d9 100644
+index 639b818..b1cb8c7 100644
 --- a/ggml/src/ggml-zdnn/ggml-zdnn.cpp
 +++ b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
 @@ -10,6 +10,7 @@
@@ -10,7 +10,25 @@ index 639b818d1..e908fc1d9 100644
  #include <unistd.h>
  
  static void ggml_zdnn_compute_forward_mul_mat(
-@@ -286,10 +287,24 @@
+@@ -109,7 +110,16 @@
+                     case GGML_TYPE_BF16:
+                         return true;
+                     default:
+-                        return false;
++                        // Quantised weights have no NNPA representation: the
++                        // accelerator's INT8 carries one scale per tensor while
++                        // GGUF carries one per block, so they cannot be fed
++                        // directly. With GGML_ZDNN_DEQUANT set they are instead
++                        // dequantised to DLFLOAT16 at first use, which is
++                        // near-lossless and lets the matmul run here. That trades
++                        // memory for prompt-processing speed, so it is opt-in.
++                        return ggml_zdnn_dequant_enabled() &&
++                               ggml_is_quantized(weights->type) &&
++                               ggml_get_type_traits(weights->type)->to_float != nullptr;
+                 }
+             } break;
+ 
+@@ -286,10 +296,24 @@
  
      ggml_backend_zdnn_buffer * extra = (ggml_backend_zdnn_buffer *)tensor->extra;
  
@@ -39,7 +57,7 @@ index 639b818d1..e908fc1d9 100644
  
      GGML_UNUSED(buffer);
  }
-@@ -559,6 +574,20 @@
+@@ -559,6 +583,20 @@
  }
  
  static size_t ggml_backend_zdnn_reg_device_count(ggml_backend_reg_t reg) {
