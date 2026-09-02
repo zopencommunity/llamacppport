@@ -1,19 +1,72 @@
 diff --git a/ggml/src/ggml-zdnn/utils.cpp b/ggml/src/ggml-zdnn/utils.cpp
-index 2977cb0fe..e8aa89fcd 100644
+index 2977cb0..2f4e89f 100644
 --- a/ggml/src/ggml-zdnn/utils.cpp
 +++ b/ggml/src/ggml-zdnn/utils.cpp
-@@ -32,7 +32,7 @@
+@@ -9,8 +9,6 @@
+             return FP16;
+         case GGML_TYPE_BF16:
+             return BFLOAT;
+-        case GGML_TYPE_Q8_0:
+-            return INT8;
+         case GGML_TYPE_I8:
+             return INT8;
+         case GGML_TYPE_I32:
+@@ -30,48 +28,110 @@
+                        const zdnn_data_layouts   layout) {
+     zdnn_init_pre_transformed_desc(
          layout,
-         ggml_zdnn_type_mapping(src->type),
+-        ggml_zdnn_type_mapping(src->type),
++        ggml_zdnn_ztensor_type(src->type),
          &pre_tfm_desc,
 -        ne[3], ne[2], ne[1], ne[0]
 +        (uint32_t)ne[3], (uint32_t)ne[2], (uint32_t)ne[1], (uint32_t)ne[0]
      );
  
      ZDNN_CHECK(zdnn_generate_transformed_desc(&pre_tfm_desc, &tfm_desc));
-@@ -40,38 +40,59 @@
+     ZDNN_CHECK(zdnn_init_ztensor_with_malloc(&pre_tfm_desc, &tfm_desc, &ztensor));
  }
  
++bool ggml_zdnn_dequant_enabled(void) {
++    // Opt-in: dequantising to DLFLOAT16 lets the accelerator take quantised
++    // matmuls, which is a large win for prompt processing, but the stickified
++    // copy is 2 bytes per weight on top of the quantised original. Generation
++    // reads more bytes per token as a result, so this is left to the operator
++    // rather than turned on by default. Evaluated once.
++    static const bool enabled = getenv("GGML_ZDNN_DEQUANT") != nullptr;
++    return enabled;
++}
++
++zdnn_data_types ggml_zdnn_ztensor_type(ggml_type type) {
++    // Quantised weights are dequantised before stickification, so the ztensor
++    // describes floats regardless of how the weights are stored on disk.
++    if (ggml_is_quantized(type)) {
++        return FP32;
++    }
++
++    return ggml_zdnn_type_mapping(type);
++}
++
++void ggml_zdnn_load_tensor_dequant(zdnn_ztensor & ztensor, const ggml_tensor * tensor) {
++    const int64_t n = ggml_nelements(tensor);
++
++    const ggml_type_traits * traits = ggml_get_type_traits(tensor->type);
++    GGML_ASSERT(traits->to_float != nullptr && "no dequantiser for this type");
++
++    // Transient: this runs once per weight, and the ztensor keeps the result.
++    float * scratch = (float *) malloc((size_t) n * sizeof(float));
++    if (scratch == nullptr) {
++        GGML_LOG_ERROR("%s: could not allocate %.1f MiB to dequantise '%s'\n",
++                       __func__, (double)((size_t) n * sizeof(float)) / (1024.0 * 1024.0),
++                       tensor->name);
++        GGML_ABORT("zdnn: dequantisation buffer allocation failed");
++    }
++
++    traits->to_float(tensor->data, scratch, n);
++    ggml_zdnn_load_tensor(ztensor, scratch);
++
++    free(scratch);
++}
++
  void ggml_zdnn_load_tensor(zdnn_ztensor & ztensor, void * buffer) {
 -    ZDNN_CHECK(zdnn_transform_ztensor(&ztensor, buffer));
 +    const zdnn_status status = zdnn_transform_ztensor(&ztensor, buffer);
@@ -69,7 +122,7 @@ index 2977cb0fe..e8aa89fcd 100644
 -                    &buffer->pre_tfm_desc,
 -                    tensor->ne[3], tensor->ne[2], tensor->ne[1], tensor->ne[0]
 -                );
-+    d->type = ggml_zdnn_type_mapping(tensor->type);
++    d->type = ggml_zdnn_ztensor_type(tensor->type);
  
 -                // TODO: Consider adding a ggml check.
 -                // TODO: If tensor = 4D, use ZDNN_NCHW by default.
