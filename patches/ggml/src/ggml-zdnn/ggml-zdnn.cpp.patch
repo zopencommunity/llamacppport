@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-zdnn/ggml-zdnn.cpp b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
-index 639b818..b1cb8c7 100644
+index 639b818..be1835e 100644
 --- a/ggml/src/ggml-zdnn/ggml-zdnn.cpp
 +++ b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
 @@ -10,6 +10,7 @@
@@ -10,7 +10,7 @@ index 639b818..b1cb8c7 100644
  #include <unistd.h>
  
  static void ggml_zdnn_compute_forward_mul_mat(
-@@ -109,7 +110,16 @@
+@@ -109,7 +110,16 @@ static bool ggml_zdnn_supports_op(const ggml_backend_zdnn_device_context * ctx_d
                      case GGML_TYPE_BF16:
                          return true;
                      default:
@@ -28,7 +28,30 @@ index 639b818..b1cb8c7 100644
                  }
              } break;
  
-@@ -286,10 +296,24 @@
+@@ -236,6 +246,22 @@ static enum ggml_status ggml_backend_zdnn_buffer_init_tensor(ggml_backend_buffer
+     zdnn_buffer->extra = nullptr;
+     snprintf(zdnn_buffer->name, GGML_MAX_NAME, "%s", tensor->name);
+ 
++    // A tensor with a zero-sized dimension carries no data for the accelerator,
++    // but zdnn_generate_transformed_desc still rejects the descriptor built from
++    // it (ZDNN_INVALID_SHAPE on dim2, which is ne[1]) and the ZDNN_CHECK inside
++    // ggml_zdnn_init_tensor would abort inference outright. Batched decode hits
++    // this routinely -- llama-batched-bench aborts at any batch size -- so
++    // register the buffer with its ztensor left zeroed and skip both
++    // stickification and the MUL_MAT bias allocation below. buffer_size stays 0,
++    // which is what ggml_backend_zdnn_buffer_free_buffer already tests before
++    // releasing a ztensor, and no operation reads an empty tensor.
++    if (ggml_is_empty(tensor)) {
++        tensor->extra = zdnn_buffer.get();
++        ctx->buffers.push_back(std::move(zdnn_buffer));
++        ctx->n_buffers++;
++        return GGML_STATUS_SUCCESS;
++    }
++
+     ggml_zdnn_init_tensor(zdnn_buffer.get(), tensor);
+     tensor->extra = zdnn_buffer.get();
+ 
+@@ -286,10 +312,24 @@ static void ggml_backend_zdnn_buffer_set_tensor(ggml_backend_buffer_t buffer, gg
  
      ggml_backend_zdnn_buffer * extra = (ggml_backend_zdnn_buffer *)tensor->extra;
  
@@ -57,7 +80,7 @@ index 639b818..b1cb8c7 100644
  
      GGML_UNUSED(buffer);
  }
-@@ -559,6 +583,20 @@
+@@ -559,6 +599,20 @@ static const char * ggml_backend_zdnn_reg_get_name(ggml_backend_reg_t reg) {
  }
  
  static size_t ggml_backend_zdnn_reg_device_count(ggml_backend_reg_t reg) {
