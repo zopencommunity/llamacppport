@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-zdnn/ggml-zdnn.cpp b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
-index 639b818..be1835e 100644
+index 639b818..28b6180 100644
 --- a/ggml/src/ggml-zdnn/ggml-zdnn.cpp
 +++ b/ggml/src/ggml-zdnn/ggml-zdnn.cpp
 @@ -10,6 +10,7 @@
@@ -10,7 +10,24 @@ index 639b818..be1835e 100644
  #include <unistd.h>
  
  static void ggml_zdnn_compute_forward_mul_mat(
-@@ -109,7 +110,16 @@ static bool ggml_zdnn_supports_op(const ggml_backend_zdnn_device_context * ctx_d
+@@ -103,13 +104,33 @@ static bool ggml_zdnn_supports_op(const ggml_backend_zdnn_device_context * ctx_d
+                         return false;
+                 }
+ 
++                // The guards above reject matmuls that are too large. NNPA's
++                // per-call cost is fixed rather than proportional to the work,
++                // so matmuls can also be too small to be worth offloading: a
++                // one-row matmul is what token generation issues, and there the
++                // accelerator is 17x slower than the CPU. Declining those here
++                // lets the accelerator take prompt processing and stay out of
++                // generation on its own, with no environment variable needed.
++                if (ne1 < ggml_zdnn_min_rows()) {
++                    return false;
++                }
++
+                 switch (weights->type) {
+                     case GGML_TYPE_F32:
+                     case GGML_TYPE_F16:
                      case GGML_TYPE_BF16:
                          return true;
                      default:
@@ -28,7 +45,7 @@ index 639b818..be1835e 100644
                  }
              } break;
  
-@@ -236,6 +246,22 @@ static enum ggml_status ggml_backend_zdnn_buffer_init_tensor(ggml_backend_buffer
+@@ -236,6 +257,22 @@ static enum ggml_status ggml_backend_zdnn_buffer_init_tensor(ggml_backend_buffer
      zdnn_buffer->extra = nullptr;
      snprintf(zdnn_buffer->name, GGML_MAX_NAME, "%s", tensor->name);
  
@@ -51,7 +68,7 @@ index 639b818..be1835e 100644
      ggml_zdnn_init_tensor(zdnn_buffer.get(), tensor);
      tensor->extra = zdnn_buffer.get();
  
-@@ -286,10 +312,24 @@ static void ggml_backend_zdnn_buffer_set_tensor(ggml_backend_buffer_t buffer, gg
+@@ -286,10 +323,24 @@ static void ggml_backend_zdnn_buffer_set_tensor(ggml_backend_buffer_t buffer, gg
  
      ggml_backend_zdnn_buffer * extra = (ggml_backend_zdnn_buffer *)tensor->extra;
  
@@ -80,7 +97,7 @@ index 639b818..be1835e 100644
  
      GGML_UNUSED(buffer);
  }
-@@ -559,6 +599,20 @@ static const char * ggml_backend_zdnn_reg_get_name(ggml_backend_reg_t reg) {
+@@ -559,6 +610,20 @@ static const char * ggml_backend_zdnn_reg_get_name(ggml_backend_reg_t reg) {
  }
  
  static size_t ggml_backend_zdnn_reg_device_count(ggml_backend_reg_t reg) {

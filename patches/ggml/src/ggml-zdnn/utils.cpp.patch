@@ -1,8 +1,8 @@
 diff --git a/ggml/src/ggml-zdnn/utils.cpp b/ggml/src/ggml-zdnn/utils.cpp
-index 2977cb0..2f4e89f 100644
+index 2977cb0..8e1db07 100644
 --- a/ggml/src/ggml-zdnn/utils.cpp
 +++ b/ggml/src/ggml-zdnn/utils.cpp
-@@ -9,8 +9,6 @@
+@@ -9,8 +9,6 @@ zdnn_data_types ggml_zdnn_type_mapping(ggml_type type) {
              return FP16;
          case GGML_TYPE_BF16:
              return BFLOAT;
@@ -11,7 +11,7 @@ index 2977cb0..2f4e89f 100644
          case GGML_TYPE_I8:
              return INT8;
          case GGML_TYPE_I32:
-@@ -30,48 +28,110 @@
+@@ -30,48 +28,133 @@ void ggml_zdnn_create_tensor(zdnn_tensor_desc  & pre_tfm_desc,
                         const zdnn_data_layouts   layout) {
      zdnn_init_pre_transformed_desc(
          layout,
@@ -34,6 +34,29 @@ index 2977cb0..2f4e89f 100644
 +    // rather than turned on by default. Evaluated once.
 +    static const bool enabled = getenv("GGML_ZDNN_DEQUANT") != nullptr;
 +    return enabled;
++}
++
++int64_t ggml_zdnn_min_rows(void) {
++    // NNPA carries a large fixed cost per matmul call, and it does not shrink
++    // with the work. Measured on z17 with SmolLM2-135M-f16: prompt processing
++    // takes 0.556-0.881 s whether the batch is 8 tokens or 512, and a decode
++    // step costs ~470 ms regardless of how many sequences are in flight. The
++    // cost is only worth paying once it is spread over enough rows -- at a
++    // single row, which is what token generation issues, the accelerator runs
++    // 17x slower than the CPU (2.20 t/s against 36.87).
++    //
++    // 32 is where the accelerator began winning in that measurement, but the
++    // crossover there coincided with llama.cpp handing matmuls to BLAS at the
++    // same batch size, so the true CPU-vs-NNPA crossover may sit higher. Hence
++    // the override: this default keeps generation off the accelerator, which is
++    // the part the data settles unambiguously.
++    static const int64_t rows = []() -> int64_t {
++        const char * s = getenv("GGML_ZDNN_MIN_ROWS");
++        if (s == nullptr) return 32;
++        const long v = strtol(s, nullptr, 10);
++        return v > 0 ? (int64_t) v : 32;
++    }();
++    return rows;
 +}
 +
 +zdnn_data_types ggml_zdnn_ztensor_type(ggml_type type) {
@@ -122,12 +145,13 @@ index 2977cb0..2f4e89f 100644
 -                    &buffer->pre_tfm_desc,
 -                    tensor->ne[3], tensor->ne[2], tensor->ne[1], tensor->ne[0]
 -                );
-+    d->type = ggml_zdnn_ztensor_type(tensor->type);
- 
+-
 -                // TODO: Consider adding a ggml check.
 -                // TODO: If tensor = 4D, use ZDNN_NCHW by default.
 -                // TODO: If tensor = 2D, use ZDNN_NHWC by default.
 -            } break;
++    d->type = ggml_zdnn_ztensor_type(tensor->type);
++
 +    if (tensor->op == GGML_OP_MUL_MAT) {
 +        d->layout = ZDNN_2D;
 +        d->dim4   = 1;
