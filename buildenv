@@ -9,6 +9,12 @@ export ZOPEN_DEV_URL="https://github.com/ggerganov/llama.cpp.git"
 export ZOPEN_DEV_DEPS="zoslib make cmake curl blis openssl libssh2 zlib libpsl zdnn"
 export ZOPEN_CATEGORIES="ai"
 export ZOPEN_NAME="llamacpp"
+# zopen appends "-DEV" to any ZOPEN_NAME without a "-", making ZOPEN_NAME
+# "llamacpp-DEV". getProjectName() only strips a suffix it recognises as a
+# version, so without this it derives the name "llamacpp-DEV" and the
+# installed .env exports LLAMACPP_DEV_HOME instead of LLAMACPP_HOME. Setting
+# ZOPEN_PROJECT_NAME short-circuits that derivation.
+export ZOPEN_PROJECT_NAME="llamacpp"
 export ZOPEN_RUNTIME_DEPS="ncurses"
 
 # export ZOPEN_SKIP_ZOSLIB_ENV_HOOK=1
