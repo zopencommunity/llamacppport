@@ -102,6 +102,21 @@ zopen_post_install()
     printSoftError "zopen update-cacert failed"
     return 4
   fi
+
+  # Drop the test binaries from the install tree. ctest runs against ../build
+  # (see ZOPEN_CHECK_OPTS) and the check stage finishes before install, so the
+  # installed copies are never executed by anything.
+  #
+  # They are not cheap to carry: everything in bin/ is statically linked against
+  # the whole llama+ggml+blis+zoslib stack, so the 40 test-* binaries come to
+  # ~0.74GB of a 2.2GB bin/. That rides along in the pax and is then expanded
+  # twice more by the RPM stage (once into BUILD, once into BUILDROOT), which is
+  # what pushed the build host out of disk space.
+  testCount=$(ls "$1"/bin/test-* 2>/dev/null | wc -l | tr -d ' ')
+  if [ "${testCount:-0}" -gt 0 ]; then
+    printInfo "- Removing ${testCount} test binaries from bin/ (ctest runs from the build tree)"
+    rm -f "$1"/bin/test-* || return 4
+  fi
 }
 
 # zopen_append_to_env()
