@@ -1,14 +1,18 @@
 diff --git a/ggml/src/ggml-zdnn/utils.hpp b/ggml/src/ggml-zdnn/utils.hpp
-index c1e2028..128d8cd 100644
+index c1e2028..27a8897 100644
 --- a/ggml/src/ggml-zdnn/utils.hpp
 +++ b/ggml/src/ggml-zdnn/utils.hpp
-@@ -14,6 +14,17 @@
+@@ -14,6 +14,21 @@ void ggml_zdnn_create_tensor(zdnn_tensor_desc & pre_tfm_desc,
  
  void ggml_zdnn_load_tensor(zdnn_ztensor & ztensor, void * buffer);
  
 +// True when GGML_ZDNN_DEQUANT is set: quantised weights are dequantised to
 +// DLFLOAT16 at first use so the accelerator can run their matmuls.
 +bool ggml_zdnn_dequant_enabled(void);
++
++// Minimum output rows for a matmul to be worth offloading to NNPA.
++// Overridable with GGML_ZDNN_MIN_ROWS.
++int64_t ggml_zdnn_min_rows(void);
 +
 +// Dequantise a quantised tensor into a scratch buffer and stickify that.
 +void ggml_zdnn_load_tensor_dequant(zdnn_ztensor & ztensor, const ggml_tensor * tensor);
